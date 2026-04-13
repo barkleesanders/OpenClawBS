@@ -200,7 +200,7 @@ Every file in `scripts/` and `systemd/` is either runnable as-is or a template y
 - **Not a product.** No installer (well, one opt-in line), no support, no guarantees.
 - **Not production-grade security.** Threat model: "VPS I run alone." Shared infra? Add hardening.
 - **Not opinionated about the AI backend.** Works with whatever model OpenClaw runs.
-- **Not a replacement for OpenClaw.** OpenClaw is the runtime; this is the config around it.
+- **Not a replacement for [OpenClaw](https://github.com/openclaw/openclaw).** OpenClaw is the runtime; this is the config around it.
 
 ## How to adopt piecewise
 
@@ -223,5 +223,5 @@ MIT. Do whatever.
 - [Composio](https://composio.dev) — the auth broker this setup is built around
 - [Beads](https://github.com/steveyegge/beads) — the task tracker the Stop hook uses
 - [Ghidra](https://ghidra-sre.org/) — when you need to reverse-engineer an undocumented API
-- OpenClaw — the underlying runtime (not published here)
+- [OpenClaw](https://github.com/openclaw/openclaw) — the underlying runtime this setup configures ([npm](https://www.npmjs.com/package/openclaw))
 - Claude Code — Anthropic's CLI, layer 1 of the stack
