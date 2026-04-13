@@ -33,9 +33,22 @@ Full playbook: **[`docs/00-security.md`](docs/00-security.md)**. Minimum viable 
 
 > **A reference architecture for running a long-lived personal AI agent that remembers things, doesn't lie, doesn't silently break, and fits on a $5 VPS.**
 
-**Cheapest VPS that works:** [**Hetzner Cloud CX22**](https://www.hetzner.com/cloud/) — ~€4.30/mo (~$5), 2 vCPU, 4 GB RAM, 40 GB SSD. This is what I use. Everything in this repo is tuned for that size of machine.
+**Cheapest VPS that works:** [**Hetzner Cloud CX23**](https://www.hetzner.com/cloud/) — **€3.99/mo** (~$4.50), 2 vCPU, 4 GB RAM, 40 GB SSD, 20 TB traffic. This is what I use. Everything in this repo is tuned for that size of machine.
 
-Don't overbuy. The memory-guardian will tell you when to upgrade. Full sizing guidance (when to move to CX32 / CX42, when a Mac Mini at home starts making more sense than climbing the tier ladder): **[`docs/11-vps-sizing.md`](docs/11-vps-sizing.md)**.
+### Quick pricing — when to upgrade (full breakdown in [`docs/11-vps-sizing.md`](docs/11-vps-sizing.md))
+
+| Plan | RAM | Price/mo | When it's right |
+|------|-----|----------|-----------------|
+| [**CX23**](https://www.hetzner.com/cloud/) | 4 GB | **€3.99** (~$4.50) | **Start here.** Agent + ~18 crons + Telegram bot + backups fit comfortably |
+| CX33 | 8 GB | €6.49 (~$7.30) | Multi-browser automation, small database, more AI crons |
+| CX43 | 16 GB | €11.99 (~$13.50) | 7-8B local LLM, real data storage. **"Maybe Mac Mini?" tier.** |
+| CX53 | 32 GB | €22.49 (~$25.50) | Probably overkill. Mac Mini at home wins here. |
+| [Mac Mini M4 base](https://www.apple.com/shop/buy-mac/mac-mini) | 16 GB | $599 once (+~$3/mo power) | 3+ year horizon, local LLM, data locality |
+| [Mac Mini M4 Pro](https://www.apple.com/shop/buy-mac/mac-mini) | 24-64 GB | $1,399-$4,000 once | Serious local inference (up to 70B LLM) |
+
+**Upgrade on evidence:** memory-guardian restarts >2×/week, disk >80% full, or you're about to add a workload you've verified won't fit. Not on vibes.
+
+**When Mac Mini starts winning:** 3 years of Hetzner CX43 ≈ a base Mac Mini. 3 years of CX53 ≈ Mac Mini M4 Pro. Full crossover math + hybrid pattern in [`docs/11-vps-sizing.md`](docs/11-vps-sizing.md).
 
 ## One-line install (AFTER security setup)
 

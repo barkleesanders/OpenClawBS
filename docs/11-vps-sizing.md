@@ -6,178 +6,250 @@ This whole setup assumes a small always-on machine. You don't need much — but 
 
 ## Where I buy VPS: Hetzner Cloud
 
-[**hetzner.com/cloud**](https://www.hetzner.com/cloud/) — German hosting provider. Best price-to-performance in the market, straightforward billing, reliable network. Not sponsored; just what I use.
+[**hetzner.com/cloud**](https://www.hetzner.com/cloud/) — German hosting provider. Best price-to-performance in the market, straightforward billing, reliable network, EU and US regions, no bandwidth surprises. Not sponsored; just what I use.
 
-Alternatives worth considering:
+Alternatives:
 
 | Provider | Why you'd pick them instead |
 |---|---|
-| [Hetzner](https://www.hetzner.com/cloud/) | **Default.** Cheapest for the RAM you get; EU data centers |
-| [OVH](https://www.ovhcloud.com/en/vps/) | Slightly higher price, but US data centers without the AWS premium |
-| [DigitalOcean](https://www.digitalocean.com/pricing/droplets) | Better UX, worse price (~2x Hetzner for equivalent specs) |
+| [Hetzner](https://www.hetzner.com/cloud/) | **Default.** Cheapest for the RAM you get, includes 20 TB traffic on every plan |
+| [OVH](https://www.ovhcloud.com/en/vps/) | Slightly higher price, broader regional coverage (Canada, Australia) |
+| [DigitalOcean](https://www.digitalocean.com/pricing/droplets) | Better UX, ~2× the price for equivalent specs |
 | [Linode / Akamai](https://www.linode.com/pricing/) | Same rough bucket as DO |
 | [AWS Lightsail](https://aws.amazon.com/lightsail/pricing/) | Only if you're already deep in AWS |
 
-**Don't use:** raw AWS EC2 / GCP Compute Engine / Azure VMs for a personal agent — you'll pay 3-5x what Hetzner costs for the same workload, and the billing complexity will eat your weekends.
+**Don't use:** raw AWS EC2 / GCP Compute Engine / Azure VMs for a personal agent. You'll pay 3-5× what Hetzner costs for the same workload, and the billing complexity will eat your weekends.
 
-## Hetzner tiers & when each makes sense
+## Full Hetzner Cloud pricing (as of April 2026)
 
-Check [**hetzner.com/cloud**](https://www.hetzner.com/cloud/) for exact current pricing. These are the tiers and approximate prices as of April 2026:
+All plans include **20 TB traffic**, **1 IPv4 + IPv6**, **DDoS protection**, and **snapshots/backups available as paid add-ons** (~20% of plan price for backups).
 
-### CX22 — ~€4.30/mo (~$5)
+Check [**hetzner.com/cloud**](https://www.hetzner.com/cloud/) for live prices — they adjusted April 2026.
 
-- 2 vCPU (shared), 4 GB RAM, 40 GB SSD, 20 TB traffic
+### Shared vCPU (CX series) — "Cost-Optimized"
 
-**Who this is for:** this is the one I started on. OpenClaw gateway runs comfortably here with the memory-guardian cron keeping it in check. Telegram bot + ~18 crons + daily backups + Cloudflare tunnel + a few other services fit in 4 GB if you're disciplined.
+This is what you want for an agent. Shared vCPU is perfectly adequate — the workload is I/O-bound, not CPU-bound.
 
-**Upgrade signal:** when you see memory-guardian triggering restarts more than twice a week, or when your workload wants to run multiple headless Chrome instances simultaneously. RAM is what runs out first, not CPU.
+| Plan | vCPU | RAM | SSD | Traffic | EUR/mo | USD/mo (~) | USD/year |
+|------|------|-----|-----|---------|--------|------------|----------|
+| **CX23** | 2 | **4 GB** | 40 GB | 20 TB | **€3.99** | ~$4.50 | ~$54 |
+| **CX33** | 4 | **8 GB** | 80 GB | 20 TB | **€6.49** | ~$7.30 | ~$88 |
+| **CX43** | 8 | **16 GB** | 160 GB | 20 TB | **€11.99** | ~$13.50 | ~$162 |
+| **CX53** | 16 | **32 GB** | 320 GB | 20 TB | **€22.49** | ~$25.50 | ~$306 |
 
-### CX32 — ~€6.90/mo (~$8)
+### Dedicated vCPU (CCX series) — "General Purpose"
 
-- 4 vCPU, 8 GB RAM, 80 GB SSD
+Pick this only if you've proven the workload is CPU-bound. For an AI agent it almost never is. Listed for completeness.
 
-**Who this is for:** comfortable middle ground. Double the RAM means you can run browser automation freely (each Chrome is ~300-500 MB), host a small Postgres or SQLite with sizable data, run more AI cron jobs concurrently, and keep ~2 GB of headroom.
+| Plan | vCPU | RAM | SSD | Traffic | EUR/mo | USD/mo (~) | USD/year |
+|------|------|-----|-----|---------|--------|------------|----------|
+| **CCX13** | 2 dedicated | 8 GB | 80 GB | 20 TB | **€15.99** | ~$18 | ~$216 |
+| **CCX23** | 4 dedicated | 16 GB | 160 GB | 20 TB | **€31.49** | ~$36 | ~$432 |
+| **CCX33** | 8 dedicated | 32 GB | 240 GB | 30 TB | **€62.49** | ~$71 | ~$852 |
+| **CCX43** | 16 dedicated | 64 GB | 360 GB | 40 TB | **€124.99** | ~$141 | ~$1,692 |
+| **CCX53** | 32 dedicated | 128 GB | 600 GB | 50 TB | **€249.99** | ~$283 | ~$3,396 |
+| **CCX63** | 48 dedicated | 192 GB | 960 GB | 60 TB | **€374.49** | ~$424 | ~$5,088 |
 
-**Upgrade signal:** you're running a local LLM (Ollama, llama.cpp) and even a 3B model feels cramped. Or you're storing real data locally and disk is filling.
+> Source: [costgoat.com/pricing/hetzner](https://costgoat.com/pricing/hetzner), [hetzner.com/cloud](https://www.hetzner.com/cloud/).
+> Check live for current pricing — Hetzner adjusts periodically.
 
-### CX42 — ~€13/mo (~$15)
+## Who each tier is for (and when to move up)
 
-- 8 vCPU, 16 GB RAM, 160 GB SSD
+### CX23 — **4 GB RAM, ~$4.50/mo** — START HERE
 
-**Who this is for:** you're running real workloads. Probably hosting a web app or two alongside the agent, possibly running a 7-8B local LLM for specific tasks (embedding, classification), maintaining a database with tens of GB of data, and running hot standby copies of services.
+**What fits comfortably:**
+- OpenClaw gateway (~1.5 GB steady state)
+- ~18 cron jobs (mix of shell + light-context AI)
+- Telegram bot, Cloudflare tunnel, daily backups
+- One active browser automation session
+- memory-guardian keeping everything honest
 
-**Upgrade signal:** this is where the "maybe Mac Mini?" calculation flips — see below.
+**Upgrade signal:** memory-guardian triggers restarts more than **2× per week**, or system `MemAvailable` regularly drops below 300 MB during normal operation.
 
-### CX52 — ~€25/mo (~$28)
+**This is what I actually run.** Two years, zero regrets. If you're starting from scratch — start here.
 
-- 16 vCPU, 32 GB RAM, 320 GB SSD
+### CX33 — **8 GB RAM, ~$7.30/mo** — Comfortable Middle Ground
 
-**Who this is for:** probably overkill for an agent unless you're running multiple agents, hosting a substantial web app, or doing on-device inference at scale.
+**What fits comfortably (in addition to CX23 workload):**
+- Multiple concurrent browser automation sessions (each Chrome is ~300-500 MB)
+- Small Postgres / MySQL / SQLite with meaningful data
+- More AI cron jobs running concurrently
+- A small Next.js / FastAPI web app alongside the agent
 
-**Upgrade signal:** don't. If you need more than this, you want dedicated hardware — either Hetzner's CCX tier (dedicated CPU) or a Mac Mini at home.
+**Upgrade signal:** you're trying to run a local LLM (even a 3B model feels cramped on 8 GB). Or you're regularly storing >40 GB of data locally.
 
-### CCX series (dedicated CPU)
+### CX43 — **16 GB RAM, ~$13.50/mo** — Real Workloads
 
-Starts ~€13/mo for 2 dedicated vCPU. Worth it if you're running CPU-bound workloads (video processing, large builds, heavy data munging). Not worth it for agent workloads, which are almost entirely I/O-bound.
+**What fits:**
+- 7-8B parameter local LLM (quantized) via llama.cpp or ollama
+- Database with tens of GB of data
+- Hot-standby copies of services
+- Real web app with persistent traffic
 
-## When to upgrade (decision tree)
+**Upgrade signal:** this is the "maybe Mac Mini?" tier. See the crossover math below.
+
+### CX53 — **32 GB RAM, ~$25.50/mo** — Probably Overkill
+
+For multiple agents, substantial hosted apps, serious on-device inference. At this price, a Mac Mini at home starts winning — see below.
+
+**Upgrade signal:** don't. If you need more than 32 GB in the cloud, either switch to CCX dedicated (workload is CPU-bound) or move to a Mac Mini at home (workload is I/O- and memory-bound).
+
+### CCX tier (dedicated CPU)
+
+Only worth it if you have a proven CPU-bound workload: video encoding, massive data pipelines, on-demand builds. **Not for agent workloads** — they're almost entirely I/O-bound and will not notice the difference between shared and dedicated vCPU.
+
+## Upgrade decision tree (evidence-based, not vibes)
 
 ```
-                  Is memory-guardian restarting
-                   the gateway more than 2x/week?
-                          │
-                ┌─────── yes ───────┐    no
-                │                   │     │
-                ▼                   │     ▼
-         Upgrade one tier.          │   Current tier is fine.
-         Re-measure after 2 weeks.  │   Don't upgrade yet.
-                                    │
-                                    └───► Or: is your disk > 80% full?
-                                                │
-                                        ┌─── yes ───┐    no
-                                        │           │     │
-                                        ▼           │     ▼
-                                  Upgrade one tier. │   Current tier is fine.
-                                  Or: clean up.     │
+                Is memory-guardian restarting
+                 the gateway more than 2×/week?
+                        │
+              ┌─────── yes ───────┐    no
+              │                   │     │
+              ▼                   │     ▼
+   Upgrade one CX tier.           │   Current tier is fine.
+   Re-measure after 2 weeks.      │   Don't upgrade yet.
+                                  │
+                                  └──► Is disk > 80% full after cleanup?
+                                              │
+                                     ┌─── yes ───┐    no
+                                     │           │     │
+                                     ▼           │     ▼
+                               Upgrade one tier. │   Stay put.
+                                                 │
+                                                 └──► Planning to add local LLM?
+                                                              │
+                                                     ┌─── yes ───┐    no
+                                                     │           │     │
+                                                     ▼           │     ▼
+                                          Skip past CX. Go Mac   │   Stay put.
+                                          Mini (see below).       │
 ```
 
 **Do not upgrade because:**
-
 - "I want more headroom" — measure first, upgrade on evidence
-- "The CPU utilization shows 80%" — that's fine, it means you're using what you paid for
-- "I might need it in six months" — upgrade in six months, then, not now
+- "CPU shows 80%" — that's fine, you're using what you paid for
+- "I might need it in six months" — upgrade in six months, not now
 
 **Do upgrade because:**
+- Memory guardian is triggering frequently
+- Disk is filling after cleanup
+- You're about to add a workload you've verified won't fit
 
-- Memory guardian is triggering frequently (evidence of actual constraint)
-- Disk is filling (growth you can't trim)
-- You're about to add a workload you know won't fit
+## Mac Mini alternative — full pricing & when it wins
 
-## When to switch to a Mac Mini (or other dedicated home machine)
+A Mac Mini at home can replace or supplement your VPS. Apple Silicon's unified memory makes it especially compelling for local LLM inference.
 
-At some point, a $25/mo VPS × 12 months × 3 years = ~$900 starts competing with a **Mac Mini** at ~$599-$799 that you own forever. And for AI workloads, Apple Silicon has become genuinely compelling for local inference.
+### Current Mac Mini configurations
 
-### The economic crossover
+| Config | Chip | RAM | SSD | Apple price | Deal price (seen) | Ideal use case |
+|--------|------|-----|-----|-------------|-------------------|----------------|
+| **Mac Mini M4 base** | M4 (10-core CPU / 10-core GPU) | **16 GB** | 256 GB | **$599** | ~$499 on sale | Agent host + occasional 3B LLM |
+| **Mac Mini M4 mid** | M4 | **24 GB** | 512 GB | **$799** | ~$699 on sale | Agent host + 7-8B LLM comfortable |
+| **Mac Mini M4 Pro base** | M4 Pro (12-core CPU / 16-core GPU) | **24 GB** | 512 GB | **$1,399** | — | Serious local inference |
+| **Mac Mini M4 Pro max** | M4 Pro | **64 GB** | 8 TB | ~**$4,000** | — | 70B LLM at 4-bit, full local AI stack |
+
+> Sources: [apple.com/shop/buy-mac/mac-mini](https://www.apple.com/shop/buy-mac/mac-mini), [appleinsider.com](https://prices.appleinsider.com/mac-mini-m4).
+
+Plus ongoing costs:
+- **Electricity**: ~$2-5/mo at idle, up to ~$10/mo under heavy LLM load (~5-30 W)
+- **UPS** (recommended): $80 one-time
+- **Internet** (assumed: you already have it)
+
+### Economic crossover with Hetzner
 
 ```
-Break-even calculation (very rough):
-
-  Hetzner CX42 at ~€13/mo × 36 months = €468 (~$520)
-  Hetzner CX52 at ~€25/mo × 36 months = €900 (~$1000)
-
-  Mac Mini M4 base (16 GB unified memory, 256 GB SSD): $599
-  Mac Mini M4 Pro (24 GB unified, 512 GB SSD):         $1,399
-  + home electricity: ~$2-5/month (idle)
-
-  So: 3 years of CX42 ≈ cost of base Mac Mini
-      3 years of CX52 ≈ cost of Mac Mini M4 Pro
+3 years of Hetzner CX23 = $54 × 3 = $162     (Mac Mini dwarfs this)
+3 years of Hetzner CX33 = $88 × 3 = $264     (Mac Mini still dwarfs)
+3 years of Hetzner CX43 = $162 × 3 = $486    (Base Mac Mini $599 — close)
+3 years of Hetzner CX53 = $306 × 3 = $918    (Mac Mini $599 wins; M4 Pro $1,399 breaks even)
+3 years of Hetzner CCX23 = $432 × 3 = $1,296 (M4 Pro $1,399 breaks even at 3 years)
+5 years of Hetzner CX43 = $162 × 5 = $810    (Mac Mini $599 wins comfortably)
+5 years of Hetzner CX53 = $306 × 5 = $1,530  (M4 Pro $1,399 wins)
 ```
 
-If you'll run the agent for 3+ years and you're already on a CX42+ tier, Mac Mini breaks even on a pure cost basis.
+**Pure dollar rule of thumb:**
+- Still at CX23/CX33? Stay on Hetzner. Mac Mini economics don't make sense.
+- At CX43 with a 3+ year horizon? Mac Mini M4 base wins.
+- At CX53 or CCX23 with a 3+ year horizon? Mac Mini M4 Pro wins.
 
-### The real reasons to switch
+### The non-economic reasons to switch
 
-Money is only part of it. The actual arguments for Mac Mini:
+Money is only part of it. The real reasons:
 
-1. **Local LLM inference.** Apple Silicon's unified memory architecture runs 7-13B models at usable speeds. A Mac Mini M4 Pro with 24 GB can fit Llama 3.3 70B at 4-bit quantization. A VPS cannot touch this at any price.
-2. **Data locality.** Your agent's memory files, browser state, and chat history never leave your home network. Cloudflare Tunnel gives you outside reachability without losing this.
-3. **Predictable cost.** Your electric bill doesn't fluctuate like cloud bandwidth charges can.
-4. **Hardware you can touch.** Disk dying? Swap it. Network weird? Power-cycle the router. Not possible in a data center.
+1. **Local LLM inference.** Apple Silicon's unified memory runs 7-13B models at usable speeds on the base M4. The M4 Pro with 64 GB runs Llama 3.3 70B at 4-bit quantization at ~8 tok/sec. A VPS at any price can't match this — you'd have to rent a GPU instance at $0.50-$4/hour.
+2. **Data locality.** Agent memory files, browser state, chat history never leave your home network. Cloudflare Tunnel gives you outside reachability without compromising this.
+3. **Predictable cost.** Your electric bill doesn't fluctuate like cloud bandwidth overage charges.
+4. **Hardware you can touch.** Disk dying? Swap it (M4 Mac Mini has user-accessible SSD). Network weird? Power-cycle the router.
+5. **M4 Mac Mini has user-replaceable SSD** — a big change from previous generations. Means you can upgrade storage without buying a whole new machine.
 
 ### The reasons not to switch
 
-1. **Home power reliability.** A 2-hour power outage means a 2-hour agent outage. If your agent handles anything real-time, this matters.
-2. **Home ISP reliability.** Consumer ISPs have worse uptime than data centers. Your agent will be unreachable during outages.
-3. **Physical presence.** You have to have a spot for the Mac Mini, a UPS, cooling. Not huge, but not zero.
-4. **Migration cost.** Moving a live agent from VPS to Mac Mini is a weekend of work. Don't do it on a whim.
+1. **Home power reliability.** A 2-hour outage is a 2-hour agent outage. Real-time surfaces (Telegram bot) go dark.
+2. **Home ISP reliability.** Consumer ISPs have worse uptime than data centers.
+3. **Physical presence.** You need a spot for the Mac Mini, a UPS, good ventilation (runs cool but not zero heat).
+4. **Migration cost.** Moving a live agent is a weekend of work — don't do it on a whim.
+5. **RAM is soldered.** If you buy the 16 GB base, you're stuck at 16 GB forever. Unlike the SSD, which is now slottable, RAM is permanent. **Buy more than you think you need.**
 
 ### The hybrid approach (what I'll probably do)
 
-Keep the cheap VPS ($5/mo CX22) as the always-on public-facing brain — it's the Telegram bot, it holds the scheduled crons, it's reliable. Put a Mac Mini at home for:
+Keep the cheap VPS ($5/mo CX23) as the always-on public-facing brain — Telegram bot, scheduled crons, reliable. Put a Mac Mini at home for:
 
 - Local LLM inference (called from the VPS via Tailscale)
-- Heavy data processing (training embeddings, running large builds)
+- Heavy data processing (embeddings, large builds)
 - Anything that benefits from hardware you own
 
-The VPS dispatches work to the Mac Mini via Tailscale when it needs horsepower. The Mac Mini hibernates when idle. You get reliability + data-locality + local inference for the cost of one cheap VPS.
+VPS dispatches work to Mac Mini via Tailscale when it needs horsepower. Mac Mini sleeps when idle. You get reliability + data locality + local inference for the cost of one cheap VPS.
 
-### Decision checklist
+**Cost of hybrid:**
+- Hetzner CX23: $54/year
+- Mac Mini M4 (24 GB / 512 GB, once): $799
+- Electricity: ~$60/year
+- **Total year 1: ~$913. Years 2+: ~$114/year.**
 
-Pick Mac Mini over bigger VPS if 3+ of these are true:
+Vs. trying to do everything on a Hetzner CX53: $306/year forever, and still no local LLM.
 
-- [ ] You're already on Hetzner CX42 or larger (€13+/mo)
+### Decision checklist for Mac Mini
+
+Pick Mac Mini over bigger VPS if **3+ of these are true**:
+
+- [ ] You're already on Hetzner CX43 or larger (€12+/mo)
 - [ ] You'll run this for 3+ years
 - [ ] You want to run local LLM inference
-- [ ] You care about data locality (agent memory doesn't leave home network)
+- [ ] You care about data locality (agent memory doesn't leave home)
 - [ ] You have reliable home power (or a UPS)
-- [ ] You have reliable home internet (or a fallback)
-- [ ] You have physical space for the machine
-- [ ] You're comfortable with ~1 hr/month of maintenance
+- [ ] You have reliable home internet (or a fallback — cell modem, etc.)
+- [ ] You have physical space (Mac Mini is tiny — 5" × 5" × 2")
+- [ ] You're comfortable with ~1 hr/month of physical maintenance
 
-Otherwise: stay on Hetzner and upgrade tiers as needed.
+Otherwise: stay on Hetzner, upgrade CX tiers on evidence.
 
-## The networking setup for a home Mac Mini
+## Networking setup for home Mac Mini
 
 Same Tailscale-first pattern as the VPS:
 
 1. Install Tailscale on the Mac Mini, join your tailnet
-2. SSH to it via `100.x.y.z` (Tailscale IP), never via your home public IP
-3. Anything public-facing (Telegram webhook, status page) goes through Cloudflare Tunnel — exactly like the VPS pattern in [`docs/00-security.md`](00-security.md)
-4. Your home router never needs port forwarding
-5. Your home ISP can rotate your public IP daily — doesn't matter, traffic flows via Tailscale + Cloudflare
+2. SSH via `100.x.y.z` (Tailscale IP), never via home public IP
+3. Public-facing needs (webhooks, status pages) → Cloudflare Tunnel — same as VPS in [`docs/00-security.md`](00-security.md)
+4. Home router never needs port forwarding
+5. ISP rotates your public IP daily? Doesn't matter — traffic flows via Tailscale + Cloudflare
 
-The security model is identical to the VPS model. Follow [`docs/00-security.md`](00-security.md) for both.
+Security model is identical to the VPS model. Follow [`docs/00-security.md`](00-security.md) for both.
 
-## What I actually use today
+## What I actually run today
 
-Small always-on VPS (Hetzner CX22, ~$5/mo) running the OpenClaw gateway + all crons. Everything in this repo is tuned for that size of machine. It's been enough for two years.
+Small always-on Hetzner VPS (CX23, ~$4.50/mo) running OpenClaw + all crons. Everything in this repo is tuned for that size of machine. It's been enough for two years.
 
-When I eventually want local LLM inference, I'll add a Mac Mini at home and have the VPS dispatch to it. No need to switch wholesale — add, don't replace.
+When I eventually want local LLM inference, I'll add a Mac Mini at home and have the VPS dispatch heavy work to it via Tailscale. Add, don't replace.
 
 ## TL;DR
 
-- **Start here:** Hetzner CX22 (~$5/mo)
-- **Upgrade on evidence:** memory-guardian restarts > 2x/week, or disk > 80% full
-- **Stop climbing the tier ladder at CX42.** Past that, ask whether a Mac Mini makes more sense.
-- **Mac Mini if:** 3-year horizon + local LLM ambitions + reliable home power + data locality matters
-- **Hybrid (cheap VPS + home Mac Mini) if:** you want the best of both
+- **Start here:** Hetzner **CX23** (€3.99/mo, 4 GB RAM)
+- **Upgrade on evidence**, not vibes — memory-guardian restarts >2×/week, or disk >80% full
+- **Stop climbing the Hetzner tier ladder at CX43**. Past that, evaluate Mac Mini.
+- **Pick Mac Mini if:** 3+ year horizon + local LLM ambitions + reliable home power + data locality matters
+- **Hybrid (cheap VPS + home Mac Mini) if:** you want both reliability and local horsepower
+
+---
+
+Sources: [hetzner.com/cloud](https://www.hetzner.com/cloud/) · [costgoat.com/pricing/hetzner](https://costgoat.com/pricing/hetzner) · [apple.com/mac-mini](https://www.apple.com/mac-mini/) · [appleinsider.com/mac-mini-m4](https://prices.appleinsider.com/mac-mini-m4)
