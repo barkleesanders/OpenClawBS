@@ -1,5 +1,7 @@
 # 11 — VPS Sizing: Where to Buy, When to Upgrade, When to Switch to a Mac Mini
 
+> **A reference architecture for running a long-lived personal AI agent that remembers things, doesn't lie, doesn't silently break, and fits on a $5 VPS.**
+
 This whole setup assumes a small always-on machine. You don't need much — but what you pick, and when you outgrow it, matters.
 
 ## Where I buy VPS: Hetzner Cloud
