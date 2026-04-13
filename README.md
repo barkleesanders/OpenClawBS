@@ -8,7 +8,28 @@ If you've tried to have an AI "remember" things and watched it confidently inven
 
 ---
 
-## One-line install
+## 🔒 SECURITY SETUP — DO THIS FIRST
+
+**An AI agent with tool access is a privileged process.** It will hold API keys for ~24 services, run shell commands on your VPS, and probably talk to chat surfaces that can receive prompts from anyone. Before you install any of this, lock the server down. This is not optional.
+
+Full playbook: **[`docs/00-security.md`](docs/00-security.md)**. Minimum viable hardening (30 min, free):
+
+1. **Tailscale before you do anything else.** Do not expose SSH to the public internet. Install Tailscale on the VPS and your laptop, get a shared tailnet, then only SSH via the Tailscale IP (`100.x.y.z`). Tailscale is free for personal use and takes ~5 minutes.
+2. **Move SSH off port 22.** Edit `/etc/ssh/sshd_config`: `Port 2222`. Stops 99% of drive-by brute-force attempts. Not security-through-obscurity — log-noise reduction.
+3. **Kill password auth.** In `/etc/ssh/sshd_config`: `PasswordAuthentication no`, `PubkeyAuthentication yes`, `PermitRootLogin prohibit-password`. Only SSH keys, never passwords.
+4. **UFW firewall, default-deny.** Allow outbound. Inbound: only your Tailscale interface (for SSH) + whatever ports your public services need (if any — prefer Cloudflare Tunnel instead).
+5. **No public IP for OpenClaw services.** Your gateway listens on `127.0.0.1` only. Anything that needs to be reachable from outside Tailscale goes through a **Cloudflare Tunnel** (`cloudflared`). Your VPS never advertises a public port.
+6. **Secrets in chmod 600 files, never in git.** Every `.env` / `-env.sh` file is mode 600, owned by root, listed in `.gitignore`. The Composio API key and Telegram bot token are the two biggest disasters if leaked — treat them accordingly.
+7. **Separate user for agent automation (not root, ideally).** If you must run as root for systemd reasons, at minimum use a systemd drop-in with `NoNewPrivileges=true`, `ProtectSystem=strict`, `ProtectHome=true`.
+8. **Chat-surface input is untrusted.** If your Telegram bot accepts messages from anyone, treat every incoming message as hostile input. Rate-limit it. Don't pipe message content into shell. Don't let the agent execute arbitrary code from chat without an allowlist.
+9. **Backups verify themselves.** The backup cron in this repo includes a preflight check + end-to-end verification — so "no alerts" genuinely means "working" instead of "failing silently."
+10. **Enable automatic security patches.** `unattended-upgrades` on Debian/Ubuntu. Review the defaults; reboot weekly if required. Vulnerabilities in OpenSSH / systemd / curl are rarer than you think but devastating when exploited.
+
+**Do NOT run the one-line installer below until steps 1–4 are done.** If you skip the security setup, you're putting an always-on process with broad tool access on a box exposed to the entire internet. That ends badly.
+
+---
+
+## One-line install (AFTER security setup)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/<YOUR-GH-USER>/OpenClawBS/main/scripts/install/quick-install.sh | bash
@@ -183,13 +204,15 @@ Every file in `scripts/` and `systemd/` is either runnable as-is or a template y
 
 ## How to adopt piecewise
 
-Pick any one pattern. They're independent:
+**Start with security** → [`docs/00-security.md`](docs/00-security.md) is step one, regardless of which patterns you end up using. Don't skip it.
+
+Then pick any of these patterns; they're independent:
 
 - **Resilient Drive backup** → [`scripts/composio-drive.sh`](scripts/composio-drive.sh) + [`scripts/templates/backup-template.sh`](scripts/templates/backup-template.sh) + [`scripts/lib/alert.sh`](scripts/lib/alert.sh)
 - **OOM prevention on small VPS** → [`scripts/memory-guardian.sh`](scripts/memory-guardian.sh) — works with any systemd service
 - **Typed persistent memory for a different agent** → [`workspace/`](workspace/) structure — applies to any runtime
 - **Stop-hook gate for Claude Code** → [`claude-code/hooks/`](claude-code/hooks/)
-- **Full setup** → Read [`docs/02-architecture.md`](docs/02-architecture.md) and go from there
+- **Full setup** → Read [`docs/00-security.md`](docs/00-security.md) first, then [`docs/02-architecture.md`](docs/02-architecture.md)
 
 ## License
 
