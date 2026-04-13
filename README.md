@@ -31,6 +31,8 @@ Full playbook: **[`docs/00-security.md`](docs/00-security.md)**. Minimum viable 
 
 ## Where to run it
 
+> **A reference architecture for running a long-lived personal AI agent that remembers things, doesn't lie, doesn't silently break, and fits on a $5 VPS.**
+
 **Cheapest VPS that works:** [**Hetzner Cloud CX22**](https://www.hetzner.com/cloud/) — ~€4.30/mo (~$5), 2 vCPU, 4 GB RAM, 40 GB SSD. This is what I use. Everything in this repo is tuned for that size of machine.
 
 Don't overbuy. The memory-guardian will tell you when to upgrade. Full sizing guidance (when to move to CX32 / CX42, when a Mac Mini at home starts making more sense than climbing the tier ladder): **[`docs/11-vps-sizing.md`](docs/11-vps-sizing.md)**.
