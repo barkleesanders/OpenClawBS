@@ -1,0 +1,38 @@
+[Unit]
+Description=OpenClaw Gateway
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=15
+
+[Service]
+Type=simple
+User=root
+
+# Pre-start: clean stale locks and kill anything on gateway port
+ExecStartPre=/bin/bash -c "fuser -k 18789/tcp 2>/dev/null; sleep 1; true"
+
+ExecStart=/usr/bin/openclaw gateway
+Restart=always
+RestartSec=15s
+KillMode=control-group
+TimeoutStopSec=30s
+TimeoutStartSec=60s
+
+# Post-stop: kill any remaining openclaw-gateway binary processes
+ExecStopPost=/bin/bash -c "pgrep -x openclaw-gatewa | xargs -r kill -9 2>/dev/null; true"
+
+Environment="HOME=/root"
+# Let gateway use up to 3GB V8 heap (~80% of 3.7GB total RAM)
+Environment="NODE_OPTIONS=--max-old-space-size=3072"
+WorkingDirectory=/root
+
+# No cgroup memory limits — memory-guardian handles proactive restarts
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw-gateway
+
+[Install]
+WantedBy=multi-user.target

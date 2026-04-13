@@ -1,0 +1,57 @@
+{
+  "_comment": "Sanitized extract. Merge relevant sections into your ~/.claude/settings.json. Personal paths, API keys, and MCP server references have been stripped.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/backup-config.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": { "tool": "Bash" },
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/pre-bash.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/taskmaster-check-completion.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run build:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh run view:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /:*)",
+      "Bash(sudo rm:*)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard origin/main:*)"
+    ]
+  },
+  "_mcpServers_note": "If you use MCP servers, add them here. Don't commit server paths that reveal your personal directory structure.",
+  "_plugins_note": "Enable plugins you use: typescript-lsp, rust-analyzer, code-review, github, evo, etc. This file originally enabled 6 plugins; the list is highly personal."
+}

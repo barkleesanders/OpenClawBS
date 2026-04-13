@@ -1,0 +1,30 @@
+#!/bin/bash
+# setup-env.sh.template
+#
+# COPY this to something like /etc/openclaw/env.sh, chmod 600, and fill in real
+# values. Source it from your cron scripts with:
+#   source /etc/openclaw/env.sh
+#
+# DO NOT commit the real file anywhere. Keep this TEMPLATE version in git.
+
+# --- Composio: required for any Composio-backed integration ---
+# Get yours at: https://app.composio.dev (Developer → API keys)
+export COMPOSIO_API_KEY="replace-me"
+
+# --- Telegram: required by alert.sh and memory-guardian.sh ---
+# Create a bot via @BotFather, then message it once and grab your chat ID from
+# https://api.telegram.org/bot<TOKEN>/getUpdates
+export TG_TOKEN="replace-me"
+export TG_CHAT="replace-me"
+
+# Some scripts use these alternate names — keep both in sync:
+export TELEGRAM_BOT_TOKEN="$TG_TOKEN"
+export TELEGRAM_CHAT_ID="$TG_CHAT"
+
+# --- OpenClaw install locations (adjust only if non-default) ---
+export OPENCLAW_HOME="/root/.openclaw"
+export OPENCLAW_SCRIPTS="/usr/local/openclaw-patterns/scripts"
+
+# --- Per-backup targets (example: one Drive folder per backup stream) ---
+# Find a folder ID by opening the folder in Drive and copying it from the URL.
+export DRIVE_FOLDER_ID="replace-me"

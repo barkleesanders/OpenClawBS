@@ -1,0 +1,206 @@
+# Global Claude Code Rules — Sanitized Extracts
+
+This is a pattern library, not a drop-in config. Copy the sections relevant to your setup into your own `~/.claude/CLAUDE.md`. Each section is self-contained.
+
+---
+
+## Git Pre-Flight Rule (MANDATORY)
+
+**ALWAYS run `git status` BEFORE any of these commands:**
+- `git commit` — verify staging
+- `git push` — verify commits exist
+- `git pull` — check for uncommitted changes
+- `git checkout/switch` — check dirty state
+- `git merge/rebase` — verify clean tree
+- `git reset` — understand impact
+
+```bash
+# Pattern: Always check first
+git status && git <command>
+```
+
+---
+
+## Composio-First Auth Rule (MANDATORY)
+
+**For ANY cron, script, tool, or agent that needs auth to a third-party service, check Composio FIRST before setting up any other OAuth / CLI auth / service-account flow. Composio auto-refreshes tokens — nothing ever expires.**
+
+### Order of preference for service auth (ALWAYS in this order)
+
+1. **Composio CLI / action** — if Composio has the action you need, use it directly
+2. **Composio's stored OAuth token + service native REST API** — when Composio's action is too limited
+3. **`gcloud` / `az` / `aws` CLI** — only if no Composio integration exists
+4. **Per-service OAuth** (`rclone config`, `gh auth`, etc.) — last resort, creates expiration risk
+5. **Service Account JSON / long-lived API key** — machine-only fallback
+
+### Composio token fetch pattern
+
+```bash
+TOKEN=$(curl -sS -H "X-API-Key: ${COMPOSIO_API_KEY}" \
+  "https://backend.composio.dev/api/v3/connected_accounts?toolkit_slug=<app>&limit=100" \
+  | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+for a in d.get('items', []):
+    if a.get('toolkit', {}).get('slug') == '<app>' and a.get('status') == 'ACTIVE':
+        print(a['data']['access_token']); break
+")
+```
+
+### Before acting
+
+- Check what's connected before picking a path
+- Never set up a new OAuth flow for a service Composio already owns
+
+---
+
+## Long-Running Agent Communication Rule
+
+**ALWAYS tell the user what's about to happen BEFORE launching a subagent via the Task tool.** Long-running agents (ship, carmack, rescue) can take 3-10+ minutes. If the user sees nothing during that time, they'll think the process is stuck and cancel — losing completed work.
+
+**Before every Task tool invocation, print a brief message:**
+- What the agent will do (1 sentence)
+- Approximate duration ("typically takes 3-7 minutes")
+- That they'll see results when it finishes
+
+Example: "Deploying to production. This runs 12+ quality gates and typically takes 3-7 minutes. You'll see the results when it finishes."
+
+**Never launch a long-running subagent silently.**
+
+---
+
+## Beads Task Tracking Rule (MANDATORY)
+
+**Use `bd` (beads) for ALL task tracking. Do NOT use TodoWrite, TaskCreate, or markdown files for tracking work.**
+
+- **Before coding**: `bd create --title="What you're doing" --description="Why" --type=task|bug|feature --priority=2`
+- **Starting work**: `bd update <id> --claim`
+- **Done**: `bd close <id>` (close multiple: `bd close <id1> <id2> ...`)
+- **Find work**: `bd ready` (unblocked), `bd list --status=open` (all open)
+- **Dependencies**: `bd dep add <child> <parent>`
+- **Persistent notes**: `bd remember "insight"` (NOT inline MEMORY.md edits)
+
+If beads isn't initialized in a repo, run: `git config beads.role maintainer && bd config set issue_prefix <PREFIX>`
+
+Priority: 0-4 (0=critical, 4=backlog). Not "high"/"medium"/"low".
+
+---
+
+## React "X is not defined" — Quick Fix Guide
+
+**The #1 production crash cause in React.** When you see "X is not defined":
+
+### Root Cause
+Inner/child component references a variable from parent scope without receiving it as a prop.
+
+### How to Fix
+1. Find the component where the error occurs (check component stack)
+2. Identify the undefined variable
+3. Check if it's passed as a prop — if not, that's the bug
+4. Either pass it as a prop or move the code to where the variable exists
+
+### Quick Detection
+```bash
+# Find nested components that might reference parent scope
+grep -n "const.*= (" components/*.tsx | grep -v "export"
+
+# Find variables used without optional chaining
+grep -rn "{[a-z][a-zA-Z]*\." --include="*.tsx" | grep -v "\?."
+```
+
+### Prevention Checklist
+- [ ] Child components ONLY use: props, local state, imports, context
+- [ ] All nullable values have `?.` optional chaining
+- [ ] No inline component definitions that close over parent state
+
+---
+
+## Silent React Startup Failure — Quick Fix Guide
+
+**The #2 production crash cause.** React silently fails to mount — only SSR/SEO fallback HTML visible, zero console errors.
+
+### Symptoms
+- Page loads but shows only static HTML (SEO fallback)
+- `#root` div is empty or has no React content
+- Zero errors in console, network tab looks normal
+- Works locally but fails in production (or vice versa)
+
+### Root Cause
+Module-level code (like `validateClientEnv()`) throws BEFORE React mounts. The error is swallowed because it happens during module evaluation, not inside React's error boundary.
+
+### Fix Pattern
+```typescript
+// ❌ WILL SILENTLY KILL REACT — throws before mount
+validateClientEnv();
+const KEY = import.meta.env.VITE_KEY || "fallback";
+
+// ✅ CORRECT — validation knows about fallbacks, won't throw
+validateClientEnv({ VITE_KEY: "fallback" });
+const KEY = import.meta.env.VITE_KEY || "fallback";
+```
+
+### Prevention Checklist
+- [ ] All validation calls pass fallbacks for vars that have hardcoded defaults
+- [ ] No `throw` statements at module scope without try/catch
+- [ ] After deploy: verify `#root` has React content (not just SEO fallback)
+
+---
+
+## Document Fabrication Prevention (for factual/legal docs)
+
+**When generating any document containing facts about real people, cases, or organizations, apply these checks.**
+
+### The Five Fabrication Patterns
+
+| Pattern | Detection |
+|---------|-----------|
+| Fabricated case citations | Grep for citation patterns, verify each against source |
+| Fabricated phone numbers | Grep all phone numbers, verify each in source |
+| Completely fabricated people | Every person named must appear in source or be user-stated |
+| Party name transposition | Grep every party name occurrence, verify full name |
+| Exhibit cross-reference drift | Extract all "Exhibit X" refs, compare against exhibit list |
+
+### Hard Rules
+- **Never add a phone number** unless it appears in a source document
+- **Never add a case citation** unless it appears in a source document
+- **Never name a person** who doesn't appear in source documents
+- **Every "Exhibit X" reference** must match the exhibit list in the same document
+- When in doubt: omit the fact, don't invent it
+
+---
+
+## Rust Development Patterns
+
+### Pre-Push (MANDATORY for multi-platform Rust CI)
+```bash
+cargo fmt --all -- --check       # Formatting (CI rejects any diff)
+cargo clippy --all-targets       # Lints (warnings = errors in CI)
+```
+
+### Common Traps
+- `deny_unknown_fields` + removed config keys = crash for existing users. Add ignored stubs.
+- `#[cfg(target_os)]` blocks: variables only mutated inside cfg blocks need `#[allow(unused_mut)]`
+- i18n strict checking: New strings need ALL locales, not just English
+
+### CI Debugging (when local grep fails)
+```bash
+gh run view <RUN_ID> --log-failed       # Actual CI failure logs
+gh pr checks <PR_NUMBER> --watch        # Monitor checks live
+```
+
+---
+
+## GitHub API Rate Limit Rule (MANDATORY)
+
+**ALWAYS use `gh api` for GitHub API calls instead of unauthenticated `curl`/HTTP requests.**
+
+- Unauthenticated: 60 requests/hour (hits rate limits fast)
+- Authenticated via `gh` CLI: 5,000 requests/hour
+
+```bash
+# ❌ WILL HIT RATE LIMITS
+curl -s https://api.github.com/repos/owner/repo/releases/latest
+
+# ✅ CORRECT
+gh api repos/owner/repo/releases/latest --jq '.tag_name'
+```

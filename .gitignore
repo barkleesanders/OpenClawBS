@@ -1,0 +1,40 @@
+# Secrets & credentials — NEVER commit
+*.env
+*.env.*
+!*.env.example
+!*.env.template
+*-env.sh
+!*-env.sh.template
+*.pem
+*.key
+*.p8
+*.crt
+
+# Identity / device auth
+identity/
+device*.json
+device-auth*.json
+
+# Provider configs that hold tokens
+.cloudflared/
+rclone.conf
+**/credentials/
+
+# Runtime state
+cron/delivery-queue/
+logs/
+*.log
+*.pid
+*.lock
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Node / misc
+node_modules/
+dist/
+build/
