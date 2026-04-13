@@ -1,6 +1,6 @@
 # OpenClawBS
 
-**A reference architecture for running a long-lived personal AI agent that remembers things, doesn't lie, doesn't silently break, and fits on a $5 VPS.**
+> **A reference architecture for running a long-lived personal AI agent that remembers things, doesn't lie, doesn't silently break, and fits on a $5 VPS.**
 
 This is my OpenClaw setup, stripped of personal projects and secrets, published as patterns anyone can copy. It's not a product, not a framework, not a distribution — it's a small opinionated pile of shell scripts, systemd units, markdown files, and reasoning about why I built it this way.
 
