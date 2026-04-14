@@ -195,6 +195,7 @@ Each layer has exactly one job. Simple enough to reason about; resilient because
 3. **Memory guardian** — 5-minute OOM watchdog with proactive restart + Telegram alerts. ([`docs/05-memory-guardian.md`](docs/05-memory-guardian.md))
 4. **Shell-first crons** — AI sessions are expensive; use shell/Python first, AI only when genuine reasoning is needed. ([`docs/06-shell-first-crons.md`](docs/06-shell-first-crons.md))
 5. **Rich failure alerts** — Every cron failure gets a Telegram message with severity, step, UTC time, runtime, error detail, and log tail. ([`docs/07-telegram-alerts.md`](docs/07-telegram-alerts.md))
+6. **OpenClaw native-first** — Before any custom script, cron, or systemd unit, check what `openclaw` does natively. Custom wrappers are last resort. ([`docs/12-openclaw-native-first.md`](docs/12-openclaw-native-first.md))
 
 ---
 
