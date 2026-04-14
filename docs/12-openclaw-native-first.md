@@ -115,3 +115,40 @@ The earlier "native-first" cleanup only inspected `/root/.openclaw/scripts/`, `/
 | Rollback story when an update fails | none | snapshot + health gate + Telegram alert |
 
 The custom code that survived exists solely to add *rollback* around `openclaw update`. Every other responsibility is delegated to `openclaw` itself.
+
+**2026-04-14 (follow-up sweep, 11:22–11:40 PT)** — Completed the remaining shadow-wrapper retirement and performed the exhaustive `/usr/local/bin`, `/usr/local/sbin`, `/etc/systemd/system`, `/root/.openclaw`, and `/root/clawd/scripts` audit that earlier sessions had only sampled.
+
+Retired in this sweep:
+
+- `/usr/local/bin/openclaw` — 111 B bash wrapper (`export TZ=America/Los_Angeles; exec /usr/bin/node /usr/lib/node_modules/openclaw/dist/entry.js`) shadowing the native `/usr/bin/openclaw` npm symlink. The TZ export was a no-op (system timezone already `America/Los_Angeles` per `timedatectl` and `/etc/timezone`), and the entry path (`dist/entry.js`) was stale — the real entry is `openclaw.mjs`. Systemd never reached the wrapper because the unit uses absolute `/usr/bin/openclaw`.
+- `/usr/local/bin/openclaw-pst` — 70 B alias of the same TZ-export pattern wrapping `/usr/bin/openclaw` directly. Same redundancy.
+- `/usr/local/bin/switch-model` — symlink pointing at a missing target (`/root/.openclaw/scripts/switch-model.sh`). Dead code. Native replacement: `openclaw models` / `openclaw models auth`.
+- `/root/clawd/scripts/openclaw-watchdog.sh` (+ `.bak`) — re-implemented gateway health polling. Last log line 2026-03-21; no longer in crontab (active watchdog is `telegram-watchdog.sh`, which is scoped to Telegram connectivity). Native replacement: `openclaw doctor` plus systemd `Restart=always`.
+- `/root/clawd/scripts/openclaw-rescue.sh` — config backup/restore. Only called by the retired `openclaw-watchdog.sh.bak`. Native replacement: `openclaw doctor --repair` / `--force`.
+- `/root/clawd/scripts/upgrade-openclaw.sh` — re-implemented `openclaw update`. Zero active references. Native replacement: `openclaw update` (already wrapped by the thin `auto-update.sh`).
+- `/root/clawd/scripts/check-openclaw-update.sh` — re-implemented `openclaw update --dry-run` via raw npm registry HTTP. Zero references. Its comment ("no npm CLI needed — it's broken on this box") was a stale 2026-03 artifact; npm is fine now.
+- `/root/clawd/scripts/pre-upgrade-backup.sh` — only called by the retired `upgrade-openclaw.sh`. Orphan.
+- `/etc/systemd/system/openclaw-gateway.service.d/env.conf.backup-20260202-175734` — 67 B stale drop-in backup containing `Environment="ANTHROPIC_API_KEY=sk-ant-proxy-placeholder"` from the pre-sandbox proxy architecture. Not loaded by systemd (verified via `DropInPaths`) but a footgun — a rename to `.conf` would silently activate it.
+- `/etc/systemd/system/openclaw-gateway.service.d/env.conf.bak-20260412-160317` — 133 B stale drop-in backup missing the `EnvironmentFile=` line that loads `/root/.openclaw/.env`. Also not loaded but another footgun in the same directory.
+
+Timezone drop-in decision: **not needed**. `timedatectl` shows `America/Los_Angeles`, `/etc/timezone` agrees, and the crontab sets `TZ=America/Los_Angeles` explicitly. The retired wrappers' `export TZ=…` was a no-op.
+
+All retirements moved to `/root/.openclaw/retired-shadow-wrappers-20260414-112230/` (with `phase5-clawd-scripts/` and `phase5-systemd-stale-backups/` subdirs), each with a README documenting rationale and rollback path. No systemd reload or gateway restart was needed — nothing still-loaded was touched.
+
+Post-sweep verification: `systemctl is-active openclaw-gateway` → `active`; `openclaw health` → `telegram: ok (@bsclaudebot) (330ms)`; 2-minute journal scan for `ERR_|No conversation|Fail|error` → zero matches; Telegram out-of-band notification delivered (`message_id: 8737`).
+
+Out-of-scope flag: `/usr/local/bin/node-pst` (70 B) wraps `node` with the same LA-timezone export. Not an openclaw shadow, so out of scope for this rule. Candidate for a future general-cleanup pass if TZ inheritance ever becomes relevant.
+
+### Updated net result (2026-04-14 11:40 PT)
+
+| | Before (2026-04-14 00:00) | After first sweep (10:45) | After follow-up sweep (11:40) |
+|---|---|---|---|
+| `auto-update.sh` length | 383 lines | 237 lines | 237 lines |
+| Custom systemd services | `openclaw-gateway`, `gateway-self-heal`, `session-watcher` | `openclaw-gateway` only | `openclaw-gateway` only |
+| Custom shell scripts touching OpenClaw state | 6 | 2 | **2** (`auto-update.sh`, `openclaw-integrity-check.sh`) |
+| `/usr/local/bin` openclaw-shadowing wrappers | 3 (`openclaw`, `openclaw-pst`, `switch-model`) | 3 (still present) | **0** |
+| Stale drop-in `.bak` files in `*.service.d/` | 2 | 2 | **0** |
+| Orphan openclaw-flavored scripts in `/root/clawd/scripts` | 5 (`openclaw-watchdog.sh(+ .bak)`, `openclaw-rescue.sh`, `upgrade-openclaw.sh`, `check-openclaw-update.sh`, `pre-upgrade-backup.sh`) | 5 (still present) | **0** |
+| Hardcoded Telegram bot tokens in openclaw helpers | 1 | 0 | 0 |
+
+Net state after this sweep: **exactly two custom shell wrappers** remain, both documented as reference implementations in [`scripts/templates/`](../scripts/templates/) — `openclaw-auto-update.sh` (snapshot+rollback around `openclaw update`) and `openclaw-integrity-check.sh` (ExecStartPre runtime-chunk guard). Everything else is either native `openclaw` or unrelated to OpenClaw.
