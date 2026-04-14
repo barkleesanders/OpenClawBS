@@ -12,6 +12,7 @@ adapting them to your box.
 | `openclaw-auto-update.sh` | Daily update wrapper. Calls `openclaw update` natively, snapshots `/usr/lib/node_modules/openclaw` first, runs a post-update health gate, rolls back from snapshot on failure, alerts Telegram out-of-band. |
 | `openclaw-integrity-check.sh` | systemd `ExecStartPre` guard. Catches the "chunk-hash mismatch after crashed install" failure mode and restores from snapshot before the gateway starts. |
 | `openclaw-integrity.conf` | Drop-in that wires the integrity check into `openclaw-gateway.service`. Does NOT modify the main unit. |
+| `refresh-anthropic-oauth.sh` | Hourly re-seed of an OpenClaw `anthropic:oauth` profile from Claude CLI's auto-maintained credentials file. Turns a static paste-token profile into a self-refreshing one without touching openclaw internals. |
 
 ## Install
 
@@ -25,6 +26,12 @@ sudo install -m 755 openclaw-integrity-check.sh /usr/local/sbin/openclaw-integri
 sudo mkdir -p /etc/systemd/system/openclaw-gateway.service.d
 sudo install -m 644 openclaw-integrity.conf /etc/systemd/system/openclaw-gateway.service.d/integrity.conf
 sudo systemctl daemon-reload
+
+# Hourly OAuth re-seed (only needed if you use `openclaw models auth paste-token`
+# to drive an `anthropic:oauth` profile — it's a static token record with no
+# refresh metadata, so it needs periodic re-seeding from Claude CLI's creds).
+install -m 755 refresh-anthropic-oauth.sh /root/.openclaw/scripts/refresh-anthropic-oauth.sh
+( crontab -l 2>/dev/null; echo '17 * * * * /root/.openclaw/scripts/refresh-anthropic-oauth.sh >> /root/.openclaw/logs/anthropic-oauth-refresh-cron.log 2>&1' ) | crontab -
 ```
 
 ## Telegram alerts

@@ -39,6 +39,7 @@ Only after all four return "not supported" do you write custom code.
 | Install/remove plugins | `openclaw plugins install` / `openclaw plugins remove` |
 | Rotate model auth | `openclaw models auth login --provider <p>` |
 | Seed a bearer setup-token non-interactively | `printf "$TOKEN\r" \| openclaw models auth paste-token --provider anthropic --profile-id anthropic:oauth` (see 2026-04-14 entry for why `\r` not `\n`) |
+| Refresh a static paste-token profile | Hourly cron running `openclaw models auth paste-token` with the fresh token read from the source of truth (Claude CLI credentials file in our case — see [`scripts/templates/refresh-anthropic-oauth.sh`](../scripts/templates/refresh-anthropic-oauth.sh)). `openclaw models auth paste-token` stores `type: "token"` records *without* refresh metadata, so they go stale in ~4 h and must be periodically re-seeded from whatever source is already handling OAuth refresh natively. |
 | Set the default model | `openclaw models set <provider>/<model>` |
 | Model invocation (long-running installs) | Prefer `anthropic/*` provider + `anthropic:oauth` (setup-token) over `claude-cli/*`. The direct-API path uses the Anthropic SDK with `Bearer` auth + `claude-code-20250219` + `oauth-2025-04-20` beta headers — Hermes pattern, no subprocess, no `--resume` / `--session-id` bug surface. |
 | Deep config audit | `openclaw doctor --deep` |
@@ -203,6 +204,41 @@ Fix: `plugins.slots.contextEngine: "lossless-claw"` → `"legacy"` (openclaw's b
 
 **Residual concerns:**
 
-- **Access token expires in ~4 h.** OpenClaw's `type: "token"` credential format does not carry a refresh token, and Claude CLI refreshes its access token on its own schedule at `/root/.claude/.credentials.json`. Short-term: if the anthropic:oauth profile expires, the configured fallback `claude-cli/claude-sonnet-4-6` takes over (the subprocess path with its known `--resume` bug). Longer-term fix: a re-seed cron that runs `printf "$(jq -r .claudeAiOauth.accessToken /root/.claude/.credentials.json)\r" | openclaw models auth paste-token --provider anthropic --profile-id anthropic:oauth` nightly. Not in place yet — flagged for follow-up.
+- ~~**Access token expires in ~4 h.** OpenClaw's `type: "token"` credential format does not carry a refresh token, and Claude CLI refreshes its access token on its own schedule at `/root/.claude/.credentials.json`. Short-term: if the anthropic:oauth profile expires, the configured fallback `claude-cli/claude-sonnet-4-6` takes over (the subprocess path with its known `--resume` bug). Longer-term fix: a re-seed cron that runs `printf "$(jq -r .claudeAiOauth.accessToken /root/.claude/.credentials.json)\r" | openclaw models auth paste-token --provider anthropic --profile-id anthropic:oauth` nightly. Not in place yet — flagged for follow-up.~~ **Resolved 2026-04-14 (follow-up, see below).**
 - `openclaw agent --agent main` CLI harness always runs the turn through the `cli-backend` (the subprocess provider), regardless of `agents.defaults.model.primary`. This is an intentional design choice of that CLI tool — response metadata shows `"runner": "cli"`. Production Telegram turns go through a different code path (channel handler → model provider dispatch → anthropic SDK for `anthropic/*` refs). Auth-state `lastGood.anthropic = "anthropic:oauth"` and the decremented OAuth usage meter confirm the production path is using the SDK.
 - `agents.defaults.models` no longer lists the `claude-cli/claude-opus-4-5`, `claude-cli/claude-sonnet-4-5`, `claude-cli/claude-haiku-4-5` entries. They had no `anthropic/*` equivalent migrated because the provider config in `openclaw.json` only lists `claude-sonnet-4-6` and `claude-haiku-4-5` under `models.providers.anthropic.models`. If we ever want `Sonnet 4.5`/`Haiku 4.5` aliases back, either add the model entries to `models.providers.anthropic.models` in `openclaw.json` or restore from the timestamped `.bak` files.
+
+**2026-04-14 (follow-up, 14:20–14:27 PT) — Hourly OAuth re-seed cron installed.** Closes the "access token expires in ~4 h" residual concern above.
+
+The `anthropic:oauth` profile is a `type: "token"` record with no refresh metadata. OpenClaw cannot refresh it natively. But Claude CLI already handles OAuth refresh for its own credentials at `/root/.claude/.credentials.json`, so we mirror that file into OpenClaw hourly.
+
+Implementation ([`scripts/templates/refresh-anthropic-oauth.sh`](../scripts/templates/refresh-anthropic-oauth.sh) — reference template, deployed on the VPS at `/root/.openclaw/scripts/refresh-anthropic-oauth.sh`):
+
+1. Invoke `IS_SANDBOX=1 claude mcp list` to nudge Claude CLI's refresh-if-needed path. Verified by forced-expire test: artificially set `claudeAiOauth.expiresAt` to a past millisecond timestamp, ran `claude mcp list`, credentials file was rewritten with a new `sk-ant-oat01-*` access token. `claude auth status` and `claude --version` do NOT trigger a refresh (read-only local checks). `claude --print` does, but it consumes inference tokens. `claude mcp list` is the lightest command that triggers the refresh path without consuming inference tokens.
+2. `python3` parse of `/root/.claude/.credentials.json` reads `claudeAiOauth.accessToken` and asserts `expiresAt` is at least 5 minutes in the future (defense against propagating an almost-dead token when the refresh didn't take effect).
+3. Compare the fresh token against the currently-stored `profiles["anthropic:oauth"].token` in `auth-profiles.json`. If identical, exit 0 — no action needed.
+4. On drift, re-seed via the native command: `printf '%s\r' "$NEW_TOKEN" | openclaw models auth paste-token --provider anthropic --profile-id anthropic:oauth`. Carriage return, never newline.
+5. Verify the new value persisted by re-reading `auth-profiles.json`, then live-probe: `openclaw models status --probe --probe-provider anthropic --probe-profile anthropic:oauth --json`, extract `.auth.probes.results[] | select(.profileId=="anthropic:oauth") | .status`, require exactly `"ok"`. This avoids a false-positive match on the generic provider-level `"status": "ok"` wrapper that openclaw emits even when the individual probe returned HTTP 401.
+6. Telegram alert on every failure branch (creds missing, empty token, paste-token non-zero exit, verification mismatch, probe not ok). Success is silent.
+
+Cron: `17 * * * * /root/.openclaw/scripts/refresh-anthropic-oauth.sh >> /root/.openclaw/logs/anthropic-oauth-refresh-cron.log 2>&1`. Minute 17 to avoid the :00 stampede. Hourly, not nightly — the token lasts ~4 h, nightly would miss 20 of 24 hours.
+
+Verification performed during install:
+
+- **First run** (with drift from the forced-expire test): `Token drift detected → re-seeding → paste-token → probe status=ok`. 28 s end-to-end.
+- **Second run** (clean state): `INFO Token unchanged — no action needed`. Exited 0 in ~5 s.
+- **Forced-drift test**: backed up `auth-profiles.json`, appended a single character to the stored token, ran the script, confirmed the re-seed path fired again and the probe came back ok, confirmed the final `auth-profiles.json` was valid JSON byte-for-byte equal to the CLI credentials token.
+- **Post-install probe**: `openclaw models status --probe --probe-provider anthropic --probe-profile anthropic:oauth` → `status: ok`, `latencyMs: 13136`, `mode: token` — real API traffic, new token accepted.
+
+**Residual concern carried forward:** the CLI's refresh token itself is long-lived but not infinite. Per Anthropic's OAuth design, refresh tokens can be invalidated on account events (password reset, session revocation, manual logout). When that happens, `claude mcp list` will error, the credentials file will stop being updated, and within ~4 h the `anthropic:oauth` profile will go stale — at which point the script's `expires-within-5-min` guard fires, sends a Telegram alert, and the configured `claude-cli/claude-sonnet-4-6` fallback takes over. Recovery is a one-time `IS_SANDBOX=1 claude /login` to re-auth the Claude CLI, after which the hourly cron resumes healing the static token. This is an order-of-magnitude-longer window than the 4 h token expiry and is visible as an alert instead of silent breakage, so it's an acceptable residual.
+
+**Before / after:**
+
+| | Before | After |
+|---|---|---|
+| `anthropic:oauth` token lifetime in practice | ~4 h static then silent breakage | hourly self-healing, alert-on-failure |
+| Failure visibility | Telegram bot goes quiet, fallback logs 401 under `auth.probes.results[].error` | Explicit Telegram alert naming the failure class (paste-token / probe / missing creds) |
+| Native-ness | — | Uses `openclaw models auth paste-token` (native) + Claude CLI's native refresh; no JSON surgery on `auth-profiles.json` |
+| Inference tokens consumed per refresh cycle | N/A | 0 (`claude mcp list` trigger path) |
+
+The only custom code added is this re-seed script. Zero changes to the main gateway unit, the integrity drop-in, `auto-update.sh`, or `notify-telegram.sh`.
