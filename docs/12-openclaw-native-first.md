@@ -38,6 +38,9 @@ Only after all four return "not supported" do you write custom code.
 | Clear stale session state | `openclaw doctor --fix` + user-side `/new` in the chat |
 | Install/remove plugins | `openclaw plugins install` / `openclaw plugins remove` |
 | Rotate model auth | `openclaw models auth login --provider <p>` |
+| Seed a bearer setup-token non-interactively | `printf "$TOKEN\r" \| openclaw models auth paste-token --provider anthropic --profile-id anthropic:oauth` (see 2026-04-14 entry for why `\r` not `\n`) |
+| Set the default model | `openclaw models set <provider>/<model>` |
+| Model invocation (long-running installs) | Prefer `anthropic/*` provider + `anthropic:oauth` (setup-token) over `claude-cli/*`. The direct-API path uses the Anthropic SDK with `Bearer` auth + `claude-code-20250219` + `oauth-2025-04-20` beta headers — Hermes pattern, no subprocess, no `--resume` / `--session-id` bug surface. |
 | Deep config audit | `openclaw doctor --deep` |
 | Inspect memory | `openclaw memory` (search/reindex) |
 | Manage cron jobs | `openclaw cron` (don't hand-edit `cron/jobs.json`) |
@@ -152,3 +155,46 @@ Out-of-scope flag: `/usr/local/bin/node-pst` (70 B) wraps `node` with the same L
 | Hardcoded Telegram bot tokens in openclaw helpers | 1 | 0 | 0 |
 
 Net state after this sweep: **exactly two custom shell wrappers** remain, both documented as reference implementations in [`scripts/templates/`](../scripts/templates/) — `openclaw-auto-update.sh` (snapshot+rollback around `openclaw update`) and `openclaw-integrity-check.sh` (ExecStartPre runtime-chunk guard). Everything else is either native `openclaw` or unrelated to OpenClaw.
+
+**2026-04-14 (structural fix, 13:51–13:55 PT)** — The wrapper retirement at 11:00 exposed the deeper bug it had been masking. The real failure class was **OpenClaw's CLI provider passes `--resume <fresh-uuid>` on the first message of every rotated session**, expecting `claude --resume` to auto-create the jsonl. Claude Code 2.1.104 rejects that: `--resume` requires an existing transcript, `--session-id` creates a fresh one. Behavior verified directly on the VPS:
+
+- `claude --resume <fresh-uuid> --print hi` → `No conversation found with session ID: <uuid>` (exit 1)
+- `claude --session-id <fresh-uuid> --print hi` → `Hi! How can I help you today?` (exit 0)
+
+The retired `/usr/local/bin/claude` wrapper had been silently *masking* this by stripping `--resume` when the corresponding jsonl was missing, converting it into a new session. Removing the wrapper at 11:00 exposed the upstream contract mismatch — every Telegram turn emitted the native `No conversation found` error → gateway → `⚠️ Something went wrong while processing your request.` for the rest of the day.
+
+The structural fix is **eliminating the subprocess path entirely** — following the [Hermes Agent](https://github.com/nousresearch/hermes-agent) reference: read the Claude Code OAuth access token, call `https://api.anthropic.com/v1/messages` directly via the Anthropic SDK with `Bearer <token>` + `anthropic-beta: claude-code-20250219,oauth-2025-04-20` headers. No `claude` binary, no `--resume` vs `--session-id`, no jsonl on disk.
+
+OpenClaw 2026.4.14 already ships this path natively as the `setup-token` auth method on the bundled `@openclaw/anthropic-provider` plugin (`/usr/lib/node_modules/openclaw/dist/extensions/anthropic/`). It is not surfaced in `openclaw.plugin.json` (which only advertises `cli` and `api-key`) but is fully registered at runtime (`register.runtime-B5HGf6Xw.js` lines 280–297). Token validation: must start with `sk-ant-oat01-` and be ≥80 chars — the Claude CLI's `accessToken` at `/root/.claude/.credentials.json` already fits. The OAuth beta headers are already embedded in `stream-wrappers-PlFj0B1V.js` lines 14–17.
+
+Migration (all native, no JSON surgery on the auth profiles):
+
+1. Backed up `openclaw.json` and `auth-profiles.json` with a timestamp suffix.
+2. `printf "$TOKEN\r" | openclaw models auth paste-token --provider anthropic --profile-id anthropic:oauth`
+   - `\n` alone does NOT submit — `@clack/prompts` reads stdin in raw mode, one char at a time, and needs `\r` (carriage return) as the Enter keypress.
+   - Produced: `{ type: "token", provider: "anthropic", token: "sk-ant-oat01-..." }` in `auth-profiles.json`, plus a matching `anthropic:oauth -> { provider: "anthropic", mode: "token" }` entry in `openclaw.json`'s `auth.profiles`.
+3. `openclaw models set anthropic/claude-sonnet-4-6`
+4. A minimal `agents.defaults.models` map update (Python one-shot, not hand-edit) to move the `Sonnet 4.6`/`Opus 4.6` aliases and `cacheRetention: short` params from their `claude-cli/*` keys onto the `anthropic/*` keys, removing the stale `claude-cli/*` entries. Configured `fallbacks: ["claude-cli/claude-sonnet-4-6"]` so the old path stays available for rollback.
+5. `systemctl restart openclaw-gateway` — gateway came up in 8 s with `[gateway] agent model: anthropic/claude-sonnet-4-6`.
+6. Direct API smoke test with the Hermes headers: `HTTP 200` from `api.anthropic.com/v1/messages`, returned `OPENCLAW_MIGRATION_OK`.
+7. `openclaw models status` shows `anthropic usage: 5h 89% left` — the OAuth usage quota endpoint is reachable, so the Bearer+beta path is live.
+
+Why `\r` and not `\n`: `openclaw models auth paste-token` runs `text()` from `@clack/prompts`, which puts stdin into raw mode (each char redraws the TUI) and treats `\r` as the submit signal. Piping `\n` leaves the prompt waiting forever. Documented here because the first attempt silently hung for 10 s and wrote nothing — a footgun for anyone scripting the same migration.
+
+**Before / after:**
+
+| | Before (13:40 PT) | After (13:55 PT) |
+|---|---|---|
+| `agents.defaults.model.primary` | `claude-cli/claude-sonnet-4-6` | `anthropic/claude-sonnet-4-6` |
+| `agents.defaults.model.fallbacks` | `[]` | `["claude-cli/claude-sonnet-4-6"]` |
+| Invocation path | spawn `claude --resume <uuid>` as subprocess | HTTPS POST `api.anthropic.com/v1/messages` with `Bearer` + `oauth-2025-04-20` |
+| Error class possible | `No conversation found with session ID: <uuid>` → Telegram `⚠️ Something went wrong` | Not representable — there is no `--resume` flag in the request shape |
+| `auth-profiles.json` | `anthropic:claude-cli` (OAuth, method=claude-cli) | `anthropic:claude-cli` (preserved) + `anthropic:oauth` (token=sk-ant-oat01-..., method=setup-token) |
+| Cron jobs (`/root/.openclaw/cron/jobs.json`) | already referenced `anthropic/*` models (44 refs, 0 `claude-cli/*`) | unchanged — zero cron migration needed |
+| Subprocess count during a Telegram turn | 1 (`node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js`) | 0 |
+
+**Residual concerns:**
+
+- **Access token expires in ~4 h.** OpenClaw's `type: "token"` credential format does not carry a refresh token, and Claude CLI refreshes its access token on its own schedule at `/root/.claude/.credentials.json`. Short-term: if the anthropic:oauth profile expires, the configured fallback `claude-cli/claude-sonnet-4-6` takes over (the subprocess path with its known bug surface). Longer-term fix: a re-seed cron that runs `printf "$(jq -r .claudeAiOauth.accessToken /root/.claude/.credentials.json)\r" | openclaw models auth paste-token --provider anthropic --profile-id anthropic:oauth` nightly. Not in place yet — flagged for follow-up.
+- `openclaw models status --probe --probe-provider anthropic` returned `unknown · 10s ↳ Context engine "lossless-claw" factory returned an invalid ContextEngine: info.id must match registered id "lossless-claw".` — a probe-harness bug in the `lossless-claw` plugin's factory check, unrelated to the anthropic API auth. Direct API test (`curl` with the same token) returned HTTP 200 with a valid completion, confirming the token + headers path works. Worth filing upstream as a probe issue separately.
+- `agents.defaults.models` no longer lists the `claude-cli/claude-opus-4-5`, `claude-cli/claude-sonnet-4-5`, `claude-cli/claude-haiku-4-5` entries. They had no `anthropic/*` equivalent migrated because the provider config in `openclaw.json` only lists `claude-sonnet-4-6` and `claude-haiku-4-5` under `models.providers.anthropic.models`. If we ever want `Sonnet 4.5` or `Haiku 4.5` aliases back, either add the model entries to `models.providers.anthropic.models` in `openclaw.json` or restore from the timestamped `.bak` files.
