@@ -202,18 +202,23 @@ Each layer has exactly one job. Simple enough to reason about; resilient because
 ## Repo layout
 
 ```
-docs/         — Philosophy & architecture essays (the "why")
-workspace/    — Markdown templates for the agent's home directory
-scripts/      — Reusable shell: composio-drive, memory-guardian, alert, backup/cron templates
-  install/    — One-line installer + env.sh template
-  lib/        — alert.sh, composio-token.sh (sourceable helpers)
-  templates/  — backup-template.sh, cron-wrapper.sh (fork + fill in)
-systemd/      — Gateway unit file + drop-in env override template
-claude-code/  — Laptop-side: hooks, CLAUDE.md sections, agent/skill patterns
-examples/     — End-to-end walkthroughs
+docs/              — Philosophy & architecture essays (the "why")
+workspace/         — Markdown templates for the agent's home directory
+scripts/           — Reusable shell: composio-drive, memory-guardian, alert, backup/cron templates
+  install/         — One-line installer + env.sh template
+  lib/             — alert.sh, composio-token.sh (sourceable helpers)
+  templates/       — backup-template.sh, cron-wrapper.sh (fork + fill in)
+  composio-drive.sh — Upload files to Drive via Composio OAuth (no rclone, no token expiration)
+systemd/           — Gateway unit file + drop-in env override template
+claude-code/       — Laptop-side: hooks, CLAUDE.md sections, agent/skill patterns
+examples/          — End-to-end walkthroughs
+records-monitor/   — NextRequest CPRA/FOIA document watcher + Drive uploader + gap analysis
+beads-sync/        — Mac → VPS beads task database sync script
+openclaw-config/   — HARD_RULES.md (agent operating rules) + cron job templates
+.env.example       — Template for all required secrets (copy to .env, never commit .env)
 ```
 
-Every file in `scripts/` and `systemd/` is either runnable as-is or a template you fill in. No personal values are baked in.
+Every file in `scripts/`, `records-monitor/`, and `systemd/` is either runnable as-is or a template you fill in. No personal values are baked in — all secrets are replaced with `YOUR_*` placeholders.
 
 ---
 
@@ -234,6 +239,9 @@ Then pick any of these patterns; they're independent:
 - **OOM prevention on small VPS** → [`scripts/memory-guardian.sh`](scripts/memory-guardian.sh) — works with any systemd service
 - **Typed persistent memory for a different agent** → [`workspace/`](workspace/) structure — applies to any runtime
 - **Stop-hook gate for Claude Code** → [`claude-code/hooks/`](claude-code/hooks/)
+- **Autonomous CPRA/FOIA document management** → [`records-monitor/`](records-monitor/) — polls NextRequest, downloads docs, uploads to Drive, analyzes gaps, drafts deficiency letters
+- **Mac-VPS task sync** → [`beads-sync/`](beads-sync/) — keeps beads tasks in sync across Mac and VPS
+- **Agent operating rules** → [`openclaw-config/HARD_RULES.md`](openclaw-config/HARD_RULES.md) — beads tracking, Telegram discipline, safety gates
 - **Full setup** → Read [`docs/00-security.md`](docs/00-security.md) first, then [`docs/02-architecture.md`](docs/02-architecture.md)
 
 ## License

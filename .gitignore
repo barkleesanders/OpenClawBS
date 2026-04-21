@@ -38,3 +38,14 @@ logs/
 node_modules/
 dist/
 build/
+
+# Records monitor runtime state — personal data, never commit
+records-monitor/seen-docs.json
+records-monitor/cookies.txt
+records-monitor/nr-cookies.txt
+records-monitor/*.json.bak
+records-monitor/prr-list.json
+
+# Beads sync runtime
+beads-sync/*.jsonl
+beads-sync/*.db

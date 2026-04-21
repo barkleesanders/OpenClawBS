@@ -1,0 +1,35 @@
+{
+  "id": "f873313e-e38b-40ac-accd-a95cdb976a08",
+  "agentId": "main",
+  "name": "NR Document Watcher",
+  "enabled": true,
+  "createdAtMs": 1776807864601,
+  "updatedAtMs": 1776812181447,
+  "schedule": {
+    "kind": "every",
+    "everyMs": 14400000,
+    "anchorMs": 1776807864601
+  },
+  "sessionTarget": "isolated",
+  "wakeMode": "now",
+  "payload": {
+    "kind": "agentTurn",
+    "message": "## STEP 0: Beads task tracking (MANDATORY \u2014 do this FIRST before anything else)\n\nRun these exact commands:\n```\n(cd /root && BEADS_ACTOR=openclaw bd create --title=\"NR Document Watcher $(date +%Y-%m-%d)\" --description=\"Poll NextRequest for new public records docs, analyze, send Telegram follow-up\" --type=task --priority=3) > /tmp/bd_issue.txt 2>/dev/null\nISSUE=$(grep \"Created issue:\" /tmp/bd_issue.txt | grep -oE \"[a-zA-Z]+-[a-z0-9]+\" | head -n 1 || echo \"\")\necho \"BEADS_ISSUE=$ISSUE\"\n[ -n \"$ISSUE\" ] && (cd /root && BEADS_ACTOR=openclaw bd update \"$ISSUE\" --claim) 2>/dev/null && echo \"Claimed $ISSUE\"\n```\n\nSave the ISSUE value (e.g. HOME-abc). You will close it at the end.\n\n---\n\nRun the NR document watcher, then analyze any new docs and send a follow-up Telegram message.\n\nSTEP 1 \u2014 Run the orchestrator:\n  python3 /opt/records-monitor/nr-orchestrator.py 2>&1\n\nThe orchestrator polls NextRequest for new public records documents, downloads them, uploads to Drive, sends a notification Telegram, and writes /tmp/nr-new-docs.json with the results.\n\nSTEP 2 \u2014 Check /tmp/nr-new-docs.json:\n  cat /tmp/nr-new-docs.json\n\nIf new_docs array is empty:\n  Close beads issue: (cd /root && BEADS_ACTOR=openclaw bd close \"$ISSUE\" --reason=\"NR watcher: no new docs\") 2>/dev/null\n  Then stop here (NO_REPLY).\n\nSTEP 3 \u2014 For each unique PRR that has new docs:\n\n  a) Extract text from each PDF:\n     pdftotext \"<local_path>\" - 2>/dev/null | head -400\n     (use local_path from the JSON; if pdftotext fails, note the filename only)\n\n  b) Read the \"subject\" field \u2014 this is what was originally requested\n\n  c) Analyze:\n     - What time period does this release cover?\n     - What doc types were provided (reports, emails, contracts, invoices)?\n     - What is in each doc vs. what the subject says was requested?\n     - Are there obvious gaps? (time gaps, missing doc types, redacted pages, boilerplate non-responses)\n\n  d) If gaps exist: draft a deficiency/follow-up letter\n\nSTEP 4 \u2014 Send the analysis via Telegram (one message per PRR):\n\ncurl -s -X POST \"https://api.telegram.org/botYOUR_TELEGRAM_BOT_TOKEN/sendMessage\" \\\n  -H \"Content-Type: application/json\" \\\n  -d \"{\\\"chat_id\\\":\\\"YOUR_TELEGRAM_CHAT_ID\\\",\\\"text\\\":\\\"<MESSAGE>\\\",\\\"parse_mode\\\":\\\"HTML\\\"}\"\n\nFormat the message as HTML:\n\n\ud83d\udd0d <b>Analysis: PRR {pid} ({dept})</b>\n\n<b>Requested:</b> {subject}\n<b>Received:</b> {N} doc(s) \u2014 {date}\n\n<b>Content summary:</b>\n{1-2 lines per doc: title/filename, date range if present, key topics}\n\n<b>Gap analysis:</b>\n{specific gaps: missing years, doc types not produced, redacted sections}\nIf no gaps: \u2705 Release appears complete\n\n<b>Recommended action:</b>\n{send deficiency letter | no action needed}\n\nIf deficiency letter recommended, append:\n\n<pre>Via NextRequest Portal \u2014 PRR {pid}\n\nDear Records Custodian,\n\nI am writing regarding my CPRA request #{pid} submitted to {dept}. The request sought: {subject}.\n\nOn {date}, you released {N} document(s). The release is incomplete because:\n\n{numbered list of specific deficiencies}\n\nUnder Gov. Code \u00a7 7920 et seq., please produce the missing records within 14 days, or provide written exemption citations for any withheld records.\n\nBarklees Sanders</pre>\n\nKeep the full message under 4000 characters. If too long, truncate at 3800 chars.\n\n## FINAL STEP: Close beads issue\n\nAfter sending all messages (or if stopping early), run:\n```\n(cd /root && BEADS_ACTOR=openclaw bd close \"$ISSUE\" --reason=\"NR watcher done: <N> new docs analyzed\") 2>/dev/null\n```",
+    "model": "zai/glm-4.7",
+    "timeoutSeconds": 240
+  },
+  "delivery": {
+    "mode": "announce",
+    "channel": "last"
+  },
+  "state": {
+    "nextRunAtMs": 1776826217140,
+    "lastRunAtMs": 1776812080987,
+    "lastRunStatus": "ok",
+    "lastStatus": "ok",
+    "lastDurationMs": 100460,
+    "lastDelivered": false,
+    "lastDeliveryStatus": "not-delivered",
+    "consecutiveErrors": 0
+  }
+}
