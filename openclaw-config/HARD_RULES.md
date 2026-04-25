@@ -13,6 +13,7 @@ Read this every session **before** AGENTS.md. Short on purpose.
 `bd` (beads) is the ONLY task tracker. Installed at `/usr/local/bin/bd`. Never use TodoWrite, markdown checklists, or MEMORY.md for tasks.
 
 Mode: **strict-forced** by default — track every actionable request and skip only pure non-actionable chatter.
+Last synced with current run backup: 2026-04-24.
 
 **For every Telegram message from Barklee (anything substantive), run these commands. Each one is a SEPARATE exec call — do NOT chain with && or |.**
 

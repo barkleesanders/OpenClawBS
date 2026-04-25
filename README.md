@@ -12,6 +12,7 @@ If you've tried to have an AI "remember" things and watched it confidently inven
 
 - Beads task tracking default is now strict for actionable requests (skip only non-actionable chatter).
 - Public docs/config were synced to match current VPS workflow.
+- Backup sync run completed for parity with the private operational repo.
 - This repo keeps the update summary high-level (no private improvement pin history).
 
 ---
