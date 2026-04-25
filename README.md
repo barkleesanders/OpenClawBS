@@ -8,6 +8,14 @@ If you've tried to have an AI "remember" things and watched it confidently inven
 
 ---
 
+## Recent config sync (2026-04-24)
+
+- Beads task tracking default is now strict for actionable requests (skip only non-actionable chatter).
+- Public docs/config were synced to match current VPS workflow.
+- This repo keeps the update summary high-level (no private improvement pin history).
+
+---
+
 ## 🔒 SECURITY SETUP — DO THIS FIRST
 
 **An AI agent with tool access is a privileged process.** It will hold API keys for ~24 services, run shell commands on your VPS, and probably talk to chat surfaces that can receive prompts from anyone. Before you install any of this, lock the server down. This is not optional.
