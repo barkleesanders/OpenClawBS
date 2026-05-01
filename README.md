@@ -1,6 +1,6 @@
 # OpenClawBS
 
-> **A reference architecture for running a long-lived personal AI agent that remembers things, doesn't lie, doesn't silently break, and fits on a $5 VPS.**
+> **A reference architecture for running a long-lived personal AI agent that remembers things, doesn't lie, and doesn't silently break — based on my real OpenClaw stack.**
 
 This is my OpenClaw setup, stripped of personal projects and secrets, published as patterns anyone can copy. It's not a product, not a framework, not a distribution — it's a small opinionated pile of shell scripts, systemd units, markdown files, and reasoning about why I built it this way.
 
@@ -8,12 +8,26 @@ If you've tried to have an AI "remember" things and watched it confidently inven
 
 ---
 
-## Recent config sync (2026-04-24)
+## Recent config sync (2026-05-01)
 
 - Beads task tracking default is now strict for actionable requests (skip only non-actionable chatter).
 - Public docs/config were synced to match current VPS workflow.
 - Backup sync run completed for parity with the private operational repo.
 - This repo keeps the update summary high-level (no private improvement pin history).
+
+## Actual live setup (sanitized)
+
+This is what I'm actually running now, without secrets:
+
+- **Host/runtime:** Mac mini (macOS 26.4.1 arm64), Node 25.9.0, OpenClaw app `2026.4.29`.
+- **Gateway:** LaunchAgent-managed, loopback-only bind (`127.0.0.1:18789`), not publicly exposed.
+- **Primary model route:** `openai-codex/gpt-5.3-codex`.
+- **Workspace brain:** `/Users/barkleesanders/clawd` with persistent markdown memory files (`SOUL.md`, `AGENTS.md`, `TOOLS.md`, `MEMORY.md`, daily notes).
+- **Automation:** OpenClaw cron jobs for agent work, plus system cron for lightweight shell jobs.
+- **Messaging:** Telegram direct for actionable alerts; cron jobs default to quiet delivery unless action is needed.
+- **Auth pattern:** Composio-backed app connections; keys/tokens stay local and are never committed.
+
+If docs in this repo describe an older VPS-first path, treat this section as the source-of-truth for my current deployment shape.
 
 ---
 
@@ -40,9 +54,9 @@ Full playbook: **[`docs/00-security.md`](docs/00-security.md)**. Minimum viable 
 
 ## Where to run it
 
-> **A reference architecture for running a long-lived personal AI agent that remembers things, doesn't lie, doesn't silently break, and fits on a $5 VPS.**
+> **A reference architecture you can run on either a cheap VPS or a local Mac mini, depending on your threat model and budget.**
 
-**Cheapest VPS that works:** [**Hetzner Cloud CX23**](https://www.hetzner.com/cloud/) — **€3.99/mo** (~$4.50), 2 vCPU, 4 GB RAM, 40 GB SSD, 20 TB traffic. This is what I use. Everything in this repo is tuned for that size of machine.
+**Cheapest VPS that works:** [**Hetzner Cloud CX23**](https://www.hetzner.com/cloud/) — **€3.99/mo** (~$4.50), 2 vCPU, 4 GB RAM, 40 GB SSD, 20 TB traffic. This repo keeps the VPS path documented, but my current primary deployment is local on Mac mini.
 
 ### Quick pricing — when to upgrade (full breakdown in [`docs/11-vps-sizing.md`](docs/11-vps-sizing.md))
 
