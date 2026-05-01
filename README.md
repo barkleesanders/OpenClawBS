@@ -11,7 +11,7 @@ If you've tried to have an AI "remember" things and watched it confidently inven
 ## Recent config sync (2026-05-01)
 
 - Beads task tracking default is now strict for actionable requests (skip only non-actionable chatter).
-- Public docs/config were synced to match current VPS workflow.
+- Public docs/config were synced to keep the VPS-first bootstrap path clear while documenting the current Mac mini production shape.
 - Backup sync run completed for parity with the private operational repo.
 - This repo keeps the update summary high-level (no private improvement pin history).
 
@@ -56,7 +56,11 @@ Full playbook: **[`docs/00-security.md`](docs/00-security.md)**. Minimum viable 
 
 > **A reference architecture you can run on either a cheap VPS or a local Mac mini, depending on your threat model and budget.**
 
-**Cheapest VPS that works:** [**Hetzner Cloud CX23**](https://www.hetzner.com/cloud/) — **€3.99/mo** (~$4.50), 2 vCPU, 4 GB RAM, 40 GB SSD, 20 TB traffic. This repo keeps the VPS path documented, but my current primary deployment is local on Mac mini.
+**Cheapest VPS that works:** [**Hetzner Cloud CX23**](https://www.hetzner.com/cloud/) — **€3.99/mo** (~$4.50), 2 vCPU, 4 GB RAM, 40 GB SSD, 20 TB traffic.
+
+**Recommendation:** start on VPS in most cases. It's cheaper, fast to ship, and enough for early automation.
+
+**When to switch to Mac mini:** once you run high-frequency cron automation, heavier browser/runtime workloads, iMessage-connected automation, or you need stronger always-on local reliability and headroom.
 
 ### Quick pricing — when to upgrade (full breakdown in [`docs/11-vps-sizing.md`](docs/11-vps-sizing.md))
 
@@ -66,12 +70,12 @@ Full playbook: **[`docs/00-security.md`](docs/00-security.md)**. Minimum viable 
 | CX33 | 8 GB | €6.49 (~$7.30) | Multi-browser automation, small database, more AI crons |
 | CX43 | 16 GB | €11.99 (~$13.50) | 7-8B local LLM, real data storage. **"Maybe Mac Mini?" tier.** |
 | CX53 | 32 GB | €22.49 (~$25.50) | Probably overkill. Mac Mini at home wins here. |
-| [Mac Mini M4 base](https://www.apple.com/shop/buy-mac/mac-mini) | 16 GB | $599 once (+~$3/mo power) | 3+ year horizon, local LLM, data locality |
-| [Mac Mini M4 Pro](https://www.apple.com/shop/buy-mac/mac-mini) | 24-64 GB | $1,399-$4,000 once | Serious local inference (up to 70B LLM) |
+| [Mac Mini M4 base](https://www.apple.com/shop/buy-mac/mac-mini) | 16 GB | $599 once (+~$3/mo power) | Best after scale-up: many cron automations, iMessage/desktop integrations, local data/control |
+| [Mac Mini M4 Pro](https://www.apple.com/shop/buy-mac/mac-mini) | 24-64 GB | $1,399-$4,000 once | Serious local inference (up to 70B LLM) + high-concurrency automation |
 
 **Upgrade on evidence:** memory-guardian restarts >2×/week, disk >80% full, or you're about to add a workload you've verified won't fit. Not on vibes.
 
-**When Mac Mini starts winning:** 3 years of Hetzner CX43 ≈ a base Mac Mini. 3 years of CX53 ≈ Mac Mini M4 Pro. Full crossover math + hybrid pattern in [`docs/11-vps-sizing.md`](docs/11-vps-sizing.md).
+**When Mac mini starts winning:** 3 years of Hetzner CX43 ≈ a base Mac Mini. 3 years of CX53 ≈ Mac Mini M4 Pro. Cost crossover is one signal; operational crossover (high cron volume, iMessage channel usage, heavier always-on workloads) is usually the real trigger. Full crossover math + hybrid pattern in [`docs/11-vps-sizing.md`](docs/11-vps-sizing.md).
 
 ## One-line install (AFTER security setup)
 
@@ -197,14 +201,15 @@ Rough math on a 6-month old project: without this pattern, ~40% of every session
 ## The three-layer architecture
 
 ```
-[ Your laptop ]              [ Cheap VPS, always-on ]        [ Composio ]
- Claude Code               OpenClaw gateway (Node)           auth broker
- skills, agents,      ⇄    cron agents, workspace,       ⇄   24+ services
- hooks, memory            memory-guardian, alerts            auto-refreshed tokens
+[ Your laptop ]          [ VPS first (or Mac mini at scale) ]   [ Composio ]
+ Claude Code             OpenClaw gateway (Node)               auth broker
+ skills, agents,    ⇄    cron agents, workspace,          ⇄   24+ services
+ hooks, memory          memory-guardian, alerts                auto-refreshed tokens
 ```
 
 - **Laptop (Claude Code)** does heavy reasoning, skill composition, code editing
-- **VPS (OpenClaw)** is the always-on brain — crons run, memory persists, Telegram bot replies
+- **OpenClaw host (usually VPS first)** is the always-on brain — crons run, memory persists, Telegram bot replies
+- **Mac mini upgrade path** becomes attractive once cron density and local channel integrations (like iMessage) outgrow small-VPS comfort
 - **Composio** is the OAuth broker for the ~24 services the agent talks to
 
 Each layer has exactly one job. Simple enough to reason about; resilient because failures in one layer don't cascade.
