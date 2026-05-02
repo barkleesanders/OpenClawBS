@@ -13,7 +13,7 @@ The guardian catches the drift before the kernel does, restarts gracefully, and 
 Copy the template:
 
 ```bash
-sudo cp /usr/local/openclaw-patterns/scripts/memory-guardian.sh /usr/local/bin/my-service-guardian.sh
+sudo cp /usr/local/openclaw-patterns/legacy/scripts/memory-guardian.sh /usr/local/bin/my-service-guardian.sh
 sudo "$EDITOR" /usr/local/bin/my-service-guardian.sh
 ```
 
