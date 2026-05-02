@@ -70,44 +70,32 @@ Full crossover math + sizing notes in [`docs/11-vps-sizing.md`](docs/11-vps-sizi
 
 ## Install
 
-### Mac mini (canonical)
+### One-liner (canonical, macOS or Linux)
 
 ```bash
-git clone https://github.com/barkleesanders/OpenClawBS.git
-cd OpenClawBS
-
-# 1. Install OpenClaw runtime
-brew install openclaw
-
-# 2. Install the LaunchAgent + env wrapper (templates use YOUR_USERNAME placeholder)
-USERNAME=$(id -un)
-mkdir -p ~/.openclaw/service-env ~/.openclaw/logs ~/Library/LaunchAgents
-
-sed "s/YOUR_USERNAME/${USERNAME}/g" launchd/ai.openclaw.gateway.plist.template \
-    > ~/Library/LaunchAgents/ai.openclaw.gateway.plist
-
-cp launchd/ai.openclaw.gateway-env-wrapper.sh.template \
-   ~/.openclaw/service-env/ai.openclaw.gateway-env-wrapper.sh
-chmod 700 ~/.openclaw/service-env/ai.openclaw.gateway-env-wrapper.sh
-
-cp launchd/ai.openclaw.gateway.env.template \
-   ~/.openclaw/service-env/ai.openclaw.gateway.env
-chmod 600 ~/.openclaw/service-env/ai.openclaw.gateway.env
-
-# 3. Edit the env file, then bootstrap
-$EDITOR ~/.openclaw/service-env/ai.openclaw.gateway.env
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.openclaw.gateway.plist
+curl -fsSL https://raw.githubusercontent.com/barkleesanders/OpenClawBS/main/install.sh | bash
 ```
 
-Full walkthrough: [`launchd/README.md`](launchd/README.md).
+That single line installs OpenClaw via Homebrew (macOS) if needed, clones this repo to `~/.openclaw-patterns`, seeds a fresh agent workspace at `~/clawd`, and on macOS renders the LaunchAgent + env-wrapper + env templates with your username already substituted in. **Nothing starts. No secrets are prompted, written, or transmitted.** When it finishes, it prints the remaining manual steps (fill the env file, bootstrap the LaunchAgent).
 
-### Linux VPS (legacy)
+The script is **idempotent** — re-run it anytime to update. It is **non-destructive** — your existing workspace, env file, and LaunchAgent plist are left alone if they already exist.
+
+You can also hand the one-liner to an agent (Claude Code, OpenClaw, Codex) and ask it to run + follow up. The agent has everything it needs from the printed next-steps and the repo itself.
+
+**Override defaults** (rarely needed):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/barkleesanders/OpenClawBS/main/legacy/scripts/install/quick-install.sh | bash
+OPENCLAWBS_INSTALL_DIR=~/code/OpenClawBS \
+OPENCLAWBS_WORKSPACE=~/myagent \
+curl -fsSL https://raw.githubusercontent.com/barkleesanders/OpenClawBS/main/install.sh | bash
 ```
 
-Sets up the systemd unit, env file, and `/usr/local/openclaw-patterns/` clone. **Read the script before running** — it's under 120 lines.
+Read the script before running if you're cautious — it's [under 200 lines](install.sh) and does exactly what's documented above.
+
+### Manual install (if you'd rather see the steps)
+
+- **macOS / launchd** — full walkthrough: [`launchd/README.md`](launchd/README.md)
+- **Linux / systemd** — `curl -fsSL https://raw.githubusercontent.com/barkleesanders/OpenClawBS/main/legacy/scripts/install/quick-install.sh | bash` (full walkthrough: [`legacy/README.md`](legacy/README.md))
 
 ---
 
