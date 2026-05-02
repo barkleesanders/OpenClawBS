@@ -1,6 +1,6 @@
 # 11 — VPS Sizing: Where to Buy, When to Upgrade, When to Switch to a Mac Mini
 
-> **A reference architecture for running a long-lived personal AI agent that remembers things, doesn't lie, doesn't silently break, and fits on a $5 VPS.**
+> **Reference for the legacy Linux/VPS deployment path. The canonical deployment moved to a Mac mini in April 2026; see [`launchd/README.md`](../launchd/README.md). This doc is preserved for users still running on a VPS.**
 
 This whole setup assumes a small always-on machine. You don't need much — but what you pick, and when you outgrow it, matters.
 
@@ -59,7 +59,7 @@ Pick this only if you've proven the workload is CPU-bound. For an AI agent it al
 
 **What fits comfortably:**
 - OpenClaw gateway (~1.5 GB steady state)
-- ~18 cron jobs (mix of shell + light-context AI)
+- ~15-20 cron jobs (mix of shell + light-context AI)
 - Telegram bot, Cloudflare tunnel, daily backups
 - One active browser automation session
 - memory-guardian keeping everything honest

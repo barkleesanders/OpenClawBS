@@ -2,88 +2,112 @@
 
 > **A reference architecture for running a long-lived personal AI agent that remembers things, doesn't lie, and doesn't silently break — based on my real OpenClaw stack.**
 
-This is my OpenClaw setup, stripped of personal projects and secrets, published as patterns anyone can copy. It's not a product, not a framework, not a distribution — it's a small opinionated pile of shell scripts, systemd units, markdown files, and reasoning about why I built it this way.
+This is my OpenClaw setup, stripped of personal projects and secrets, published as patterns anyone can copy. It's not a product, not a framework, not a distribution — it's a small opinionated pile of shell scripts, launchd plists, markdown files, and reasoning about why I built it this way.
 
 If you've tried to have an AI "remember" things and watched it confidently invent facts, or wired up an agent that silently stopped working because an OAuth token expired, or burned $40 in tokens before noticing an infinite loop — this setup is a direct answer to those failures.
 
 ---
 
-## Recent config sync (2026-05-01)
-
-- Beads task tracking default is now strict for actionable requests (skip only non-actionable chatter).
-- Public docs/config were synced to keep the VPS-first bootstrap path clear while documenting the current Mac mini production shape.
-- Backup sync run completed for parity with the private operational repo.
-- This repo keeps the update summary high-level (no private improvement pin history).
-
 ## Actual live setup (sanitized)
 
-This is what I'm actually running now, without secrets:
+This is what I'm actually running, without secrets:
 
 - **Host/runtime:** Mac mini (macOS 26.4.1 arm64), Node 25.9.0, OpenClaw app `2026.4.29`.
-- **Gateway:** LaunchAgent-managed, loopback-only bind (`127.0.0.1:18789`), not publicly exposed.
+- **Process supervisor:** macOS `launchd` LaunchAgent (`ai.openclaw.gateway`), loopback-only bind (`127.0.0.1:18789`), not publicly exposed. Reference plist: [`launchd/ai.openclaw.gateway.plist.template`](launchd/ai.openclaw.gateway.plist.template).
 - **Primary model route:** `openai-codex/gpt-5.3-codex`.
-- **Workspace brain:** `/Users/barkleesanders/clawd` with persistent markdown memory files (`SOUL.md`, `AGENTS.md`, `TOOLS.md`, `MEMORY.md`, daily notes).
-- **Automation:** OpenClaw cron jobs for agent work, plus system cron for lightweight shell jobs.
-- **Messaging:** Telegram direct for actionable alerts; cron jobs default to quiet delivery unless action is needed.
-- **Auth pattern:** Composio-backed app connections; keys/tokens stay local and are never committed.
+- **Workspace brain:** `~/clawd` with persistent markdown memory files (`SOUL.md`, `IDENTITY.md`, `USER.md`, `AGENTS.md`, `TOOLS.md`, `MEMORY.md`, daily notes).
+- **Automation:** ~37 OpenClaw cron jobs for AI agent work (NextRequest watcher, AIVA PR auto-merge, calendar deltas, weekly self-maintenance, etc.) plus a couple of `crontab` entries for pure shell jobs.
+- **Messaging:** Telegram for actionable alerts; cron jobs default to quiet delivery unless action is needed.
+- **Auth pattern:** Composio-backed app connections; keys/tokens stay local (chmod 600 env files) and are never committed.
 
-If docs in this repo describe an older VPS-first path, treat this section as the source-of-truth for my current deployment shape.
+The Linux/VPS path that this repo originally documented still works and is preserved under [`legacy/`](legacy/) for anyone deploying on a Hetzner/OVH/DO box. See ["Where to run it"](#where-to-run-it) for the tradeoff.
 
 ---
 
 ## 🔒 SECURITY SETUP — DO THIS FIRST
 
-**An AI agent with tool access is a privileged process.** It will hold API keys for ~24 services, run shell commands on your VPS, and probably talk to chat surfaces that can receive prompts from anyone. Before you install any of this, lock the server down. This is not optional.
+**An AI agent with tool access is a privileged process.** It will hold API keys for ~24 services, run shell commands on your host, and probably talk to chat surfaces that can receive prompts from anyone. Before you install any of this, lock the box down. This is not optional.
 
-Full playbook: **[`docs/00-security.md`](docs/00-security.md)**. Minimum viable hardening (30 min, free):
+Full playbook: **[`docs/00-security.md`](docs/00-security.md)**. Minimum viable hardening:
 
-1. **Tailscale before you do anything else.** Do not expose SSH to the public internet. Install Tailscale on the VPS and your laptop, get a shared tailnet, then only SSH via the Tailscale IP (`100.x.y.z`). Tailscale is free for personal use and takes ~5 minutes.
-2. **Move SSH off port 22.** Edit `/etc/ssh/sshd_config`: `Port 2222`. Stops 99% of drive-by brute-force attempts. Not security-through-obscurity — log-noise reduction.
-3. **Kill password auth.** In `/etc/ssh/sshd_config`: `PasswordAuthentication no`, `PubkeyAuthentication yes`, `PermitRootLogin prohibit-password`. Only SSH keys, never passwords.
-4. **UFW firewall, default-deny.** Allow outbound. Inbound: only your Tailscale interface (for SSH) + whatever ports your public services need (if any — prefer Cloudflare Tunnel instead).
-5. **No public IP for OpenClaw services.** Your gateway listens on `127.0.0.1` only. Anything that needs to be reachable from outside Tailscale goes through a **Cloudflare Tunnel** (`cloudflared`). Your VPS never advertises a public port.
-6. **Secrets in chmod 600 files, never in git.** Every `.env` / `-env.sh` file is mode 600, owned by root, listed in `.gitignore`. The Composio API key and Telegram bot token are the two biggest disasters if leaked — treat them accordingly.
-7. **Separate user for agent automation (not root, ideally).** If you must run as root for systemd reasons, at minimum use a systemd drop-in with `NoNewPrivileges=true`, `ProtectSystem=strict`, `ProtectHome=true`.
+1. **Tailscale before you do anything else.** Don't expose SSH (or your gateway) to the public internet. Install Tailscale on your host and your laptop, get a shared tailnet, then only reach the host via the Tailscale IP (`100.x.y.z`). Free for personal use, ~5 min to set up.
+2. **Move SSH off port 22.** On Linux: edit `/etc/ssh/sshd_config`: `Port 2222`. On macOS: System Settings → General → Sharing → Remote Login. Stops 99% of drive-by brute-force attempts.
+3. **Kill password auth** (Linux): `PasswordAuthentication no`, `PubkeyAuthentication yes`. macOS sshd defaults to keys-only when configured via Sharing.
+4. **Firewall, default-deny on inbound.** Linux: `ufw`. macOS: System Settings → Network → Firewall, set "Block all incoming connections" except the apps you allow.
+5. **No public IP for OpenClaw services.** The gateway listens on `127.0.0.1` only. Anything that needs to be reachable from outside Tailscale goes through a **Cloudflare Tunnel** (`cloudflared`). Your host never advertises a public port.
+6. **Secrets in chmod 600 files, never in git.** Every `.env` / env-wrapper file is mode 600, listed in `.gitignore`. The Composio API key and Telegram bot token are the two biggest disasters if leaked — treat them accordingly.
+7. **Run as your user, not root** (Linux). On macOS, the LaunchAgent already runs under your user (`gui/$(id -u)`), not root.
 8. **Chat-surface input is untrusted.** If your Telegram bot accepts messages from anyone, treat every incoming message as hostile input. Rate-limit it. Don't pipe message content into shell. Don't let the agent execute arbitrary code from chat without an allowlist.
-9. **Backups verify themselves.** The backup cron in this repo includes a preflight check + end-to-end verification — so "no alerts" genuinely means "working" instead of "failing silently."
-10. **Enable automatic security patches.** `unattended-upgrades` on Debian/Ubuntu. Review the defaults; reboot weekly if required. Vulnerabilities in OpenSSH / systemd / curl are rarer than you think but devastating when exploited.
+9. **Backups verify themselves.** Backup crons in this repo include a preflight check + end-to-end verification — so "no alerts" genuinely means "working" instead of "failing silently."
+10. **Enable automatic security patches.** macOS: System Settings → General → Software Update → Automatically install. Linux: `unattended-upgrades`.
 
-**Do NOT run the one-line installer below until steps 1–4 are done.** If you skip the security setup, you're putting an always-on process with broad tool access on a box exposed to the entire internet. That ends badly.
+**Do NOT install the gateway until steps 1–4 are done.** If you skip the security setup, you're putting an always-on process with broad tool access on a box exposed to the internet. That ends badly.
 
 ---
 
 ## Where to run it
 
-> **A reference architecture you can run on either a cheap VPS or a local Mac mini, depending on your threat model and budget.**
+> **A reference architecture you can run on a local Mac mini (the canonical path) or a cheap Linux VPS (the legacy path), depending on your threat model and budget.**
 
-**Cheapest VPS that works:** [**Hetzner Cloud CX23**](https://www.hetzner.com/cloud/) — **€3.99/mo** (~$4.50), 2 vCPU, 4 GB RAM, 40 GB SSD, 20 TB traffic.
+**Recommendation:** start on a Mac mini if you have one, or any other always-on macOS host. The original setup ran on a [**Hetzner Cloud CX23**](https://www.hetzner.com/cloud/) — **€3.99/mo** (~$4.50), 2 vCPU, 4 GB RAM — and that path still works (see [`legacy/`](legacy/)), but the Mac path wins once you need iMessage / Notes / Shortcuts integrations or your cron density goes past ~30 jobs.
 
-**Recommendation:** start on VPS in most cases. It's cheaper, fast to ship, and enough for early automation.
+### Mac mini (canonical, since 2026-04-29)
 
-**When to switch to Mac mini:** once you run high-frequency cron automation, heavier browser/runtime workloads, iMessage-connected automation, or you need stronger always-on local reliability and headroom.
+| Plan | RAM | Price | When it's right |
+|------|-----|-------|-----------------|
+| [**Mac Mini M4 base**](https://www.apple.com/shop/buy-mac/mac-mini) | 16 GB | $599 once (+~$3/mo power) | **Default.** ~37 OpenClaw crons + Telegram bot + browser automation + iMessage automation fits comfortably. |
+| [Mac Mini M4 Pro](https://www.apple.com/shop/buy-mac/mac-mini) | 24-64 GB | $1,399-$4,000 once | Serious local inference (up to 70B LLM) + high-concurrency automation. |
 
-### Quick pricing — when to upgrade (full breakdown in [`docs/11-vps-sizing.md`](docs/11-vps-sizing.md))
+### Linux VPS (legacy, still supported)
 
 | Plan | RAM | Price/mo | When it's right |
 |------|-----|----------|-----------------|
-| [**CX23**](https://www.hetzner.com/cloud/) | 4 GB | **€3.99** (~$4.50) | **Start here.** Agent + ~18 crons + Telegram bot + backups fit comfortably |
-| CX33 | 8 GB | €6.49 (~$7.30) | Multi-browser automation, small database, more AI crons |
-| CX43 | 16 GB | €11.99 (~$13.50) | 7-8B local LLM, real data storage. **"Maybe Mac Mini?" tier.** |
-| CX53 | 32 GB | €22.49 (~$25.50) | Probably overkill. Mac Mini at home wins here. |
-| [Mac Mini M4 base](https://www.apple.com/shop/buy-mac/mac-mini) | 16 GB | $599 once (+~$3/mo power) | Best after scale-up: many cron automations, iMessage/desktop integrations, local data/control |
-| [Mac Mini M4 Pro](https://www.apple.com/shop/buy-mac/mac-mini) | 24-64 GB | $1,399-$4,000 once | Serious local inference (up to 70B LLM) + high-concurrency automation |
+| [**Hetzner CX23**](https://www.hetzner.com/cloud/) | 4 GB | **€3.99** (~$4.50) | Tight budget, no need for desktop/iMessage integrations. |
+| Hetzner CX33 | 8 GB | €6.49 (~$7.30) | Multi-browser automation, small database, more AI crons. |
+| Hetzner CX43 | 16 GB | €11.99 (~$13.50) | 7-8B local LLM, real data storage. *Crossover with Mac mini purchase ≈ 3 years.* |
 
-**Upgrade on evidence:** memory-guardian restarts >2×/week, disk >80% full, or you're about to add a workload you've verified won't fit. Not on vibes.
+Full crossover math + sizing notes in [`docs/11-vps-sizing.md`](docs/11-vps-sizing.md).
 
-**When Mac mini starts winning:** 3 years of Hetzner CX43 ≈ a base Mac Mini. 3 years of CX53 ≈ Mac Mini M4 Pro. Cost crossover is one signal; operational crossover (high cron volume, iMessage channel usage, heavier always-on workloads) is usually the real trigger. Full crossover math + hybrid pattern in [`docs/11-vps-sizing.md`](docs/11-vps-sizing.md).
+## Install
 
-## One-line install (AFTER security setup)
+### Mac mini (canonical)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<YOUR-GH-USER>/OpenClawBS/main/scripts/install/quick-install.sh | bash
+git clone https://github.com/barkleesanders/OpenClawBS.git
+cd OpenClawBS
+
+# 1. Install OpenClaw runtime
+brew install openclaw
+
+# 2. Install the LaunchAgent + env wrapper (templates use YOUR_USERNAME placeholder)
+USERNAME=$(id -un)
+mkdir -p ~/.openclaw/service-env ~/.openclaw/logs ~/Library/LaunchAgents
+
+sed "s/YOUR_USERNAME/${USERNAME}/g" launchd/ai.openclaw.gateway.plist.template \
+    > ~/Library/LaunchAgents/ai.openclaw.gateway.plist
+
+cp launchd/ai.openclaw.gateway-env-wrapper.sh.template \
+   ~/.openclaw/service-env/ai.openclaw.gateway-env-wrapper.sh
+chmod 700 ~/.openclaw/service-env/ai.openclaw.gateway-env-wrapper.sh
+
+cp launchd/ai.openclaw.gateway.env.template \
+   ~/.openclaw/service-env/ai.openclaw.gateway.env
+chmod 600 ~/.openclaw/service-env/ai.openclaw.gateway.env
+
+# 3. Edit the env file, then bootstrap
+$EDITOR ~/.openclaw/service-env/ai.openclaw.gateway.env
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.openclaw.gateway.plist
 ```
 
-That clones the repo to `/usr/local/openclaw-patterns/`, installs the scripts, sets up the systemd unit, and prints next steps for filling in your env file. No daemons start without your confirmation. Read the script before running if you're cautious — it's under 100 lines.
+Full walkthrough: [`launchd/README.md`](launchd/README.md).
+
+### Linux VPS (legacy)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/barkleesanders/OpenClawBS/main/legacy/scripts/install/quick-install.sh | bash
+```
+
+Sets up the systemd unit, env file, and `/usr/local/openclaw-patterns/` clone. **Read the script before running** — it's under 120 lines.
 
 ---
 
@@ -106,6 +130,7 @@ Every session starts with no memory. You can pour context into the prompt, but y
 **The fix here: files on disk are the source of truth; session context is disposable.**
 
 - `SOUL.md` — who the agent is (principles, personality, continuity)
+- `IDENTITY.md` — agent identity context (handles, public-facing voice, tone)
 - `USER.md` — who you are (name, timezone, preferences)
 - `AGENTS.md` — how the agent operates (rules for this workspace)
 - `TOOLS.md` — local infrastructure notes (your SSH hosts, device names, APIs)
@@ -121,7 +146,7 @@ OAuth tokens expire. RAM creeps up. Background jobs accumulate zombies. None of 
 **The fix here: three layers of defense.**
 
 1. **Composio-first auth** ([`docs/04-composio-first-auth.md`](docs/04-composio-first-auth.md)): never hold an OAuth token yourself. Let Composio auto-refresh them. Fetch fresh tokens on every cron run. Tokens *cannot* expire from your perspective.
-2. **Memory guardian** ([`scripts/memory-guardian.sh`](scripts/memory-guardian.sh)): every 5 minutes, a dumb shell script checks RSS, available RAM, and disk growth. Restarts the gateway proactively. Telegram alerts you with context.
+2. **Memory guardian (Linux only)** ([`legacy/scripts/memory-guardian.sh`](legacy/scripts/memory-guardian.sh)): a 5-minute cron that checks RSS, available RAM, and disk growth, and proactively restarts the gateway via `systemctl` before the kernel OOM killer fires. **macOS doesn't need this** — launchd respawns crashed processes cleanly and the M-series memory pressure handling is gentler than Linux's. Pattern is preserved for the VPS path.
 3. **Rich failure alerts** ([`scripts/lib/alert.sh`](scripts/lib/alert.sh)): when a cron fails, the Telegram message includes severity, step, UTC time, runtime, the actual error, and the last 5 log lines. So when you wake up, you already know where to look.
 
 ---
@@ -148,7 +173,7 @@ The pattern: **shell > Python > AI session**. Shell is free and fast. Python is 
 
 ### Cron jobs as autonomous mini-agents
 
-A cron job isn't "scheduled script" here — it's a mini-agent that wakes up, checks something, acts if needed, and goes back to sleep. The ~18 cron jobs on my VPS together form a continuous background heartbeat. Some are pure shell (cheap, fast, deterministic). A few need AI reasoning and pass `--light-context` to skip the 52K-token system prompt.
+A cron job isn't "scheduled script" here — it's a mini-agent that wakes up, checks something, acts if needed, and goes back to sleep. The ~37 OpenClaw cron jobs on my Mac mini together form a continuous background heartbeat. Some are pure shell (cheap, fast, deterministic) and live in `crontab` / launchd. The AI-reasoning ones live in `openclaw cron`.
 
 The discipline: **every cron alerts Telegram on failure, writes status on success, and has a timeout.** Failures never go unnoticed. Successes stay quiet.
 
@@ -163,7 +188,7 @@ My Stop hook checks:
 - Any recent tool errors unresolved? → not done
 - Did the AI explicitly address the user's request? → if not, not done
 
-**This is the single most important pattern for preventing "AI said it was done but lied."** The AI can't unilaterally decide it's finished. See [`claude-code/hooks/taskmaster-check-completion.sh`](claude-code/hooks/taskmaster-check-completion.sh).
+**This is the single most important pattern for preventing "AI said it was done but lied."** The AI can't unilaterally decide it's finished. See [`claude-code/hooks/taskmaster-check-completion.sh`](claude-code/hooks/taskmaster-check-completion.sh). On the live system this lives at `~/.claude/skills/taskmaster/hooks/check-completion.sh` — keeping it under a skill directory means it gets indexed by the skill loader and stays versioned with the skill.
 
 ### Prompts as source-of-truth, not context-filler
 
@@ -201,29 +226,30 @@ Rough math on a 6-month old project: without this pattern, ~40% of every session
 ## The three-layer architecture
 
 ```
-[ Your laptop ]          [ VPS first (or Mac mini at scale) ]   [ Composio ]
- Claude Code             OpenClaw gateway (Node)               auth broker
- skills, agents,    ⇄    cron agents, workspace,          ⇄   24+ services
- hooks, memory          memory-guardian, alerts                auto-refreshed tokens
+[ Your laptop ]              [ OpenClaw host (Mac mini canonical, VPS legacy) ]   [ Composio ]
+ Claude Code                 OpenClaw gateway (Node, launchd or systemd)          auth broker
+ skills, agents,        ⇄    cron agents, workspace,                         ⇄    24+ services
+ hooks, memory               Telegram bot, alerts                                 auto-refreshed tokens
 ```
 
 - **Laptop (Claude Code)** does heavy reasoning, skill composition, code editing
-- **OpenClaw host (usually VPS first)** is the always-on brain — crons run, memory persists, Telegram bot replies
-- **Mac mini upgrade path** becomes attractive once cron density and local channel integrations (like iMessage) outgrow small-VPS comfort
+- **OpenClaw host** is the always-on brain — crons run, memory persists, Telegram bot replies
+  - **Mac mini path:** `launchd` LaunchAgent supervises the gateway; ~37 `openclaw cron` jobs handle agent work; system `crontab` handles deterministic shell jobs; iMessage/Notes/Shortcuts available natively.
+  - **Linux VPS path (legacy):** systemd unit supervises the gateway; `memory-guardian.sh` watchdogs OOM; otherwise identical.
 - **Composio** is the OAuth broker for the ~24 services the agent talks to
 
 Each layer has exactly one job. Simple enough to reason about; resilient because failures in one layer don't cascade.
 
 ---
 
-## The five patterns, one sentence each
+## The patterns, one sentence each
 
-1. **Workspace-as-brain** — Fixed markdown files (SOUL/USER/IDENTITY/AGENTS/TOOLS/MEMORY) are the agent's persistent home. ([`docs/03-workspace.md`](docs/03-workspace.md))
+1. **Workspace-as-brain** — Fixed markdown files (SOUL/IDENTITY/USER/AGENTS/TOOLS/MEMORY) are the agent's persistent home. ([`docs/03-workspace.md`](docs/03-workspace.md))
 2. **Composio-first auth** — Never hold OAuth tokens; let Composio auto-refresh them. ([`docs/04-composio-first-auth.md`](docs/04-composio-first-auth.md))
-3. **Memory guardian** — 5-minute OOM watchdog with proactive restart + Telegram alerts. ([`docs/05-memory-guardian.md`](docs/05-memory-guardian.md))
+3. **Memory guardian (Linux only)** — 5-minute OOM watchdog with proactive systemd restart + Telegram alerts. ([`legacy/docs/05-memory-guardian.md`](legacy/docs/05-memory-guardian.md))
 4. **Shell-first crons** — AI sessions are expensive; use shell/Python first, AI only when genuine reasoning is needed. ([`docs/06-shell-first-crons.md`](docs/06-shell-first-crons.md))
 5. **Rich failure alerts** — Every cron failure gets a Telegram message with severity, step, UTC time, runtime, error detail, and log tail. ([`docs/07-telegram-alerts.md`](docs/07-telegram-alerts.md))
-6. **OpenClaw native-first** — Before any custom script, cron, or systemd unit, check what `openclaw` does natively. Custom wrappers are last resort. ([`docs/12-openclaw-native-first.md`](docs/12-openclaw-native-first.md))
+6. **OpenClaw native-first** — Before any custom script, cron, or service unit, check what `openclaw` does natively. Custom wrappers are last resort. ([`docs/12-openclaw-native-first.md`](docs/12-openclaw-native-first.md))
 
 ---
 
@@ -232,28 +258,28 @@ Each layer has exactly one job. Simple enough to reason about; resilient because
 ```
 docs/              — Philosophy & architecture essays (the "why")
 workspace/         — Markdown templates for the agent's home directory
-scripts/           — Reusable shell: composio-drive, memory-guardian, alert, backup/cron templates
-  install/         — One-line installer + env.sh template
+launchd/           — macOS LaunchAgent + env-wrapper templates (canonical deployment)
+scripts/           — Cross-platform shell: composio-drive, alert, backup/cron templates
   lib/             — alert.sh, composio-token.sh (sourceable helpers)
   templates/       — backup-template.sh, cron-wrapper.sh (fork + fill in)
   composio-drive.sh — Upload files to Drive via Composio OAuth (no rclone, no token expiration)
-systemd/           — Gateway unit file + drop-in env override template
 claude-code/       — Laptop-side: hooks, CLAUDE.md sections, agent/skill patterns
 examples/          — End-to-end walkthroughs
 records-monitor/   — NextRequest CPRA/FOIA document watcher + Drive uploader + gap analysis
-beads-sync/        — Mac → VPS beads task database sync script
+beads-sync/        — Two-host beads task database sync script (host-agnostic)
 openclaw-config/   — HARD_RULES.md (agent operating rules) + cron job templates
+legacy/            — Linux/VPS deployment patterns (systemd unit, quick-install.sh, memory-guardian.sh)
 .env.example       — Template for all required secrets (copy to .env, never commit .env)
 ```
 
-Every file in `scripts/`, `records-monitor/`, and `systemd/` is either runnable as-is or a template you fill in. No personal values are baked in — all secrets are replaced with `YOUR_*` placeholders.
+Every file in `scripts/`, `launchd/`, `legacy/`, `records-monitor/` is either runnable as-is or a template you fill in. No personal values are baked in — all secrets are replaced with `YOUR_*` placeholders.
 
 ---
 
 ## What this isn't
 
-- **Not a product.** No installer (well, one opt-in line), no support, no guarantees.
-- **Not production-grade security.** Threat model: "VPS I run alone." Shared infra? Add hardening.
+- **Not a product.** No installer (well, two opt-in ones), no support, no guarantees.
+- **Not production-grade security.** Threat model: "host I run alone." Shared infra? Add hardening.
 - **Not opinionated about the AI backend.** Works with whatever model OpenClaw runs.
 - **Not a replacement for [OpenClaw](https://github.com/openclaw/openclaw).** OpenClaw is the runtime; this is the config around it.
 
@@ -264,13 +290,14 @@ Every file in `scripts/`, `records-monitor/`, and `systemd/` is either runnable 
 Then pick any of these patterns; they're independent:
 
 - **Resilient Drive backup** → [`scripts/composio-drive.sh`](scripts/composio-drive.sh) + [`scripts/templates/backup-template.sh`](scripts/templates/backup-template.sh) + [`scripts/lib/alert.sh`](scripts/lib/alert.sh)
-- **OOM prevention on small VPS** → [`scripts/memory-guardian.sh`](scripts/memory-guardian.sh) — works with any systemd service
+- **OOM prevention on small VPS (Linux)** → [`legacy/scripts/memory-guardian.sh`](legacy/scripts/memory-guardian.sh) — works with any systemd service
 - **Typed persistent memory for a different agent** → [`workspace/`](workspace/) structure — applies to any runtime
 - **Stop-hook gate for Claude Code** → [`claude-code/hooks/`](claude-code/hooks/)
 - **Autonomous CPRA/FOIA document management** → [`records-monitor/`](records-monitor/) — polls NextRequest, downloads docs, uploads to Drive, analyzes gaps, drafts deficiency letters
-- **Mac-VPS task sync** → [`beads-sync/`](beads-sync/) — keeps beads tasks in sync across Mac and VPS
+- **Two-host task sync** → [`beads-sync/`](beads-sync/) — keeps beads tasks in sync across two hosts via Tailscale SSH
 - **Agent operating rules** → [`openclaw-config/HARD_RULES.md`](openclaw-config/HARD_RULES.md) — beads tracking, Telegram discipline, safety gates
-- **Full setup** → Read [`docs/00-security.md`](docs/00-security.md) first, then [`docs/02-architecture.md`](docs/02-architecture.md)
+- **Mac mini full setup** → Read [`docs/00-security.md`](docs/00-security.md) first, then [`launchd/README.md`](launchd/README.md)
+- **Linux VPS full setup** → Read [`docs/00-security.md`](docs/00-security.md) first, then [`legacy/README.md`](legacy/README.md)
 
 ## License
 

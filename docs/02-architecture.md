@@ -4,14 +4,14 @@ Three layers. Each has one job. Failures in one don't cascade into another.
 
 ```
 ┌──────────────────────────┐      ┌──────────────────────────────────┐      ┌────────────────┐
-│  Layer 1: Your laptop    │      │  Layer 2: VPS (always-on)        │      │  Layer 3:      │
-│  (Claude Code)           │◄────►│  (OpenClaw gateway + cron brain) │◄────►│  Composio      │
+│  Layer 1: Your laptop    │      │  Layer 2: OpenClaw host          │      │  Layer 3:      │
+│  (Claude Code)           │◄────►│  (Mac mini canonical / VPS legacy)│◄────►│  Composio      │
 │                          │      │                                  │      │  (auth broker) │
-│  - Skills & agents       │      │  - Gateway (Node, systemd)       │      │                │
-│  - Hooks                 │      │  - ~18 cron jobs                 │      │  - 24+ OAuth   │
-│  - Local memory          │      │  - Workspace on disk             │      │    tokens      │
-│  - Sync to VPS via SSH   │      │  - Memory guardian               │      │  - Auto-       │
-│                          │      │  - Telegram bot                  │      │    refreshed   │
+│  - Skills & agents       │      │  - Gateway (Node + launchd)      │      │                │
+│  - Hooks                 │      │  - ~37 openclaw cron jobs        │      │  - 24+ OAuth   │
+│  - Local memory          │      │  - Workspace on disk (~/clawd)   │      │    tokens      │
+│  - Sync via Tailscale    │      │  - Telegram bot                  │      │  - Auto-       │
+│                          │      │  - Loopback bind 127.0.0.1:18789 │      │    refreshed   │
 └──────────────────────────┘      └──────────────────────────────────┘      └────────────────┘
            ↓                                      ↓                                  ↓
     heavy reasoning                  persistent presence                   auth-as-a-service
@@ -31,17 +31,38 @@ Key components here (all in `~/.claude/`):
 
 The laptop is *transient*. It sleeps when you close it. Long-running work gets handed to layer 2.
 
-## Layer 2 — OpenClaw on a VPS
+## Layer 2 — OpenClaw host (Mac mini canonical / Linux VPS legacy)
 
-This is the always-on brain. Not powerful — a 3.7 GB Hetzner box at $5/month. But it's always reachable and never forgets.
+This is the always-on brain. The reference deployment runs on a Mac mini M4 base
+(16 GB RAM, draws ~3W idle). The original deployment ran on a 3.7 GB Hetzner CX23
+at $5/month and that path still works — see [`legacy/`](../legacy/).
 
-Services:
+Services (Mac mini canonical):
 
-- **`openclaw-gateway.service`** — a Node.js daemon. Holds the chat surfaces (Telegram bot, possibly WhatsApp, Discord), orchestrates tools, routes messages to the LLM. Uses ~1.5 GB RAM steady state.
-- **systemd unit** — `Restart=always`, `NODE_OPTIONS=--max-old-space-size=3072`. No cgroup memory limit (the guardian handles that).
-- **`memory-guardian.sh`** — every 5 minutes: checks RSS, available RAM, Chrome state JSON size. Restarts the gateway proactively before OOM. Alerts Telegram.
-- **Cron jobs** — ~18 of them. Each is a small autonomous task: daily database backup, hourly token refresh, every-5-minute rate-limit check, nightly cleanup. Most are pure shell; a few use AI sessions with `--light-context`.
-- **Workspace on disk** — `/root/.openclaw/workspace-main/` holds SOUL / USER / AGENTS / TOOLS / MEMORY. Every AI session that spawns here reads them first.
+- **`ai.openclaw.gateway` LaunchAgent** — a Node.js daemon supervised by `launchd`.
+  Holds the chat surfaces (Telegram bot, possibly WhatsApp, Discord), orchestrates
+  tools, routes messages to the LLM. Bind is loopback-only (`127.0.0.1:18789`).
+  Plist template: [`launchd/ai.openclaw.gateway.plist.template`](../launchd/ai.openclaw.gateway.plist.template).
+- **launchd KeepAlive policy** — restart on crash, 15-second throttle. No memory
+  cap; macOS handles RSS pressure gracefully on M-series.
+- **`openclaw cron` jobs** — ~37 of them. Each is a small autonomous AI agent:
+  daily database backup, every-15-minute deploy-verifier, NextRequest watcher,
+  AIVA PR auto-merge, nightly self-maintenance, weekly system upgrade. Full-context
+  by default (flat-rate model plan makes that effectively free).
+- **System `crontab` jobs** — a couple of pure-shell jobs (PR auto-merge wrapper,
+  Space-A signup renew). Pure shell never goes through `openclaw cron` — wasted
+  AI tokens.
+- **Workspace on disk** — `~/clawd/` holds SOUL / IDENTITY / USER / AGENTS / TOOLS / MEMORY.
+  Every AI session that spawns here reads them first.
+
+Services (Linux VPS legacy — preserved under `legacy/`):
+
+- **`openclaw-gateway.service`** systemd unit, `Restart=always`,
+  `NODE_OPTIONS=--max-old-space-size=3072`, no cgroup memory cap.
+- **`memory-guardian.sh`** — every 5 minutes: checks RSS, available RAM, Chrome
+  state JSON size. Restarts the gateway proactively before OOM. Alerts Telegram.
+  This pattern is **Linux-only** — macOS doesn't need it because launchd respawns
+  cleanly and M-series memory pressure handling rarely escalates to OOM.
 
 ## Layer 3 — Composio (auth broker)
 

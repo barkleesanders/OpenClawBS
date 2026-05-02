@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ai.openclaw.gateway.plist — LaunchAgent template for OpenClaw on macOS.
+
+  Install:
+    1. Replace YOUR_USERNAME with your macOS username (`id -un`).
+    2. Verify the openclaw / node paths match your install (`which openclaw` / `which node`).
+    3. Copy to ~/Library/LaunchAgents/ai.openclaw.gateway.plist
+    4. launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.openclaw.gateway.plist
+    5. launchctl print gui/$(id -u)/ai.openclaw.gateway   # verify state=running
+
+  Notes:
+    - Bind is loopback-only (127.0.0.1:18789). Anything that needs external reach
+      goes through a Cloudflare Tunnel (`cloudflared`), not a public port.
+    - Env vars (Composio API key, Telegram tokens) live in a chmod 600 wrapper
+      script outside this plist — see the env-wrapper template alongside this file.
+    - umask 077 keeps gateway-written files private.
+
+  Uninstall:
+    launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/ai.openclaw.gateway.plist
+    rm ~/Library/LaunchAgents/ai.openclaw.gateway.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.openclaw.gateway</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/YOUR_USERNAME/.openclaw/service-env/ai.openclaw.gateway-env-wrapper.sh</string>
+        <string>/Users/YOUR_USERNAME/.openclaw/service-env/ai.openclaw.gateway.env</string>
+        <string>/opt/homebrew/opt/node/bin/node</string>
+        <string>/opt/homebrew/lib/node_modules/openclaw/dist/index.js</string>
+        <string>gateway</string>
+        <string>--port</string>
+        <string>18789</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/YOUR_USERNAME/.openclaw</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>15</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USERNAME/.openclaw/logs/gateway.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USERNAME/.openclaw/logs/gateway.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>OSLogRateLimit</key>
+        <string>64</string>
+    </dict>
+
+    <key>Umask</key>
+    <integer>63</integer>
+</dict>
+</plist>

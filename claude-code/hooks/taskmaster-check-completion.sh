@@ -5,11 +5,17 @@
 # It runs when Claude Code tries to end a session. If anything is unresolved,
 # it exits non-zero and Claude Code will force the AI to continue.
 #
-# Install in ~/.claude/settings.json:
+# Install:
+#   1. Copy this script to a stable path. The reference deployment uses
+#      ~/.claude/skills/taskmaster/hooks/check-completion.sh — keeping it under
+#      a skill directory means it gets indexed by the skill-loader and stays
+#      versioned with the rest of the skill.
+#   2. Wire it into ~/.claude/settings.json:
+#
 #   "hooks": {
 #     "Stop": [{
 #       "hooks": [
-#         { "type": "command", "command": "$HOME/.claude/hooks/taskmaster-check-completion.sh" }
+#         { "type": "command", "command": "$HOME/.claude/skills/taskmaster/hooks/check-completion.sh" }
 #       ]
 #     }]
 #   }

@@ -9,10 +9,15 @@ Walkthrough of wiring `scripts/templates/backup-template.sh` into a real working
 - A Telegram bot + chat ID (see `docs/07-telegram-alerts.md`)
 - A Google Drive folder created for the backups — grab its ID from the URL
 
-## Step 1 — Run the installer
+## Step 1 — Run the installer (Linux VPS / legacy path)
+
+> This example targets the Linux VPS path. On a Mac mini, swap the systemd
+> + `/etc/openclaw/env.sh` paths for the launchd flow described in
+> [`launchd/README.md`](../launchd/README.md). The backup template itself
+> is host-agnostic — only the install/scheduling steps differ.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<YOUR-GH-USER>/OpenClawBS/main/scripts/install/quick-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/barkleesanders/OpenClawBS/main/legacy/scripts/install/quick-install.sh | bash
 ```
 
 After this you have:

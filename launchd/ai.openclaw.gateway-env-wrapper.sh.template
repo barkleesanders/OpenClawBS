@@ -1,0 +1,32 @@
+#!/bin/bash
+# ai.openclaw.gateway-env-wrapper.sh — env loader for the OpenClaw LaunchAgent.
+#
+# Why a wrapper instead of putting env vars in the plist:
+#   - Plists are world-readable in $HOME/Library/LaunchAgents/. Secrets there are leaked.
+#   - This wrapper sources a chmod 600 env file before exec'ing node. Secrets stay
+#     in a private file.
+#
+# Install:
+#   1. Copy this script to ~/.openclaw/service-env/ai.openclaw.gateway-env-wrapper.sh
+#   2. Copy ai.openclaw.gateway-env.template alongside it as ai.openclaw.gateway.env
+#   3. chmod 600 ~/.openclaw/service-env/ai.openclaw.gateway.env
+#   4. chmod 700 ~/.openclaw/service-env/ai.openclaw.gateway-env-wrapper.sh
+#
+# The plist invokes:
+#   wrapper.sh <env-file> <node-binary> <openclaw-entry> gateway --port 18789
+
+set -euo pipefail
+
+ENV_FILE="$1"; shift
+
+if [ -f "$ENV_FILE" ]; then
+    # shellcheck disable=SC1090
+    set -a
+    . "$ENV_FILE"
+    set +a
+fi
+
+# Make sure logs dir exists; LaunchAgent stdout/stderr point at it.
+mkdir -p "${HOME}/.openclaw/logs"
+
+exec "$@"

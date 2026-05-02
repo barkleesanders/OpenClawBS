@@ -1,8 +1,14 @@
 #!/bin/bash
 # quick-install.sh — Bootstrap OpenClawBS on a fresh Linux VPS.
 #
-# Usage (from README):
-#   curl -fsSL https://raw.githubusercontent.com/<YOUR-GH-USER>/OpenClawBS/main/scripts/install/quick-install.sh | bash
+# >>> LEGACY PATH <<<
+# The reference deployment moved to a Mac mini running launchd in April 2026.
+# This script is preserved for users who still want to deploy on a Linux host.
+# See ../../launchd/README.md for the canonical macOS path.
+#
+# Usage (after forking the repo):
+#   curl -fsSL https://raw.githubusercontent.com/barkleesanders/OpenClawBS/main/legacy/scripts/install/quick-install.sh | bash
+#   (or: REPO_URL=https://github.com/<YOUR-FORK>/OpenClawBS.git bash quick-install.sh)
 #
 # What this does:
 #   1. Clones/updates the repo to /usr/local/openclaw-patterns
@@ -21,7 +27,7 @@
 
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/REPLACE_ME_WITH_YOUR_USER/OpenClawBS.git}"
+REPO_URL="${REPO_URL:-https://github.com/barkleesanders/OpenClawBS.git}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/openclaw-patterns}"
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
 ETC_DIR="${ETC_DIR:-/etc/openclaw}"
@@ -46,10 +52,10 @@ fi
 
 # --- 2. Install scripts to /usr/local/bin ---
 info "Linking scripts into $BIN_DIR"
-$SUDO ln -sf "$INSTALL_DIR/scripts/composio-drive.sh"     "$BIN_DIR/composio-drive.sh"
-$SUDO ln -sf "$INSTALL_DIR/scripts/memory-guardian.sh"    "$BIN_DIR/memory-guardian.sh"
-$SUDO ln -sf "$INSTALL_DIR/scripts/templates/cron-wrapper.sh" "$BIN_DIR/cron-wrapper.sh"
-$SUDO chmod +x "$INSTALL_DIR"/scripts/*.sh "$INSTALL_DIR"/scripts/lib/*.sh "$INSTALL_DIR"/scripts/templates/*.sh
+$SUDO ln -sf "$INSTALL_DIR/scripts/composio-drive.sh"           "$BIN_DIR/composio-drive.sh"
+$SUDO ln -sf "$INSTALL_DIR/legacy/scripts/memory-guardian.sh"   "$BIN_DIR/memory-guardian.sh"
+$SUDO ln -sf "$INSTALL_DIR/scripts/templates/cron-wrapper.sh"   "$BIN_DIR/cron-wrapper.sh"
+$SUDO chmod +x "$INSTALL_DIR"/scripts/*.sh "$INSTALL_DIR"/scripts/lib/*.sh "$INSTALL_DIR"/scripts/templates/*.sh "$INSTALL_DIR"/legacy/scripts/memory-guardian.sh
 
 # --- 3. Env file skeleton ---
 info "Creating $ETC_DIR (mode 700)"
@@ -58,7 +64,7 @@ $SUDO chmod 700 "$ETC_DIR"
 
 if [ ! -f "$ETC_DIR/env.sh" ]; then
   info "Dropping env.sh template at $ETC_DIR/env.sh (mode 600)"
-  $SUDO cp "$INSTALL_DIR/scripts/install/setup-env.sh.template" "$ETC_DIR/env.sh"
+  $SUDO cp "$INSTALL_DIR/legacy/scripts/install/setup-env.sh.template" "$ETC_DIR/env.sh"
   $SUDO chmod 600 "$ETC_DIR/env.sh"
 else
   info "$ETC_DIR/env.sh already exists — leaving untouched"
@@ -66,13 +72,13 @@ fi
 
 # --- 4. Systemd unit (install but don't enable) ---
 info "Installing systemd unit (not enabled yet)"
-$SUDO cp "$INSTALL_DIR/systemd/openclaw-gateway.service" /etc/systemd/system/openclaw-gateway.service
+$SUDO cp "$INSTALL_DIR/legacy/systemd/openclaw-gateway.service" /etc/systemd/system/openclaw-gateway.service
 
 if [ ! -d /etc/systemd/system/openclaw-gateway.service.d ]; then
   $SUDO mkdir -p /etc/systemd/system/openclaw-gateway.service.d
 fi
 if [ ! -f /etc/systemd/system/openclaw-gateway.service.d/env.conf ]; then
-  $SUDO cp "$INSTALL_DIR/systemd/openclaw-gateway.service.d/env.conf.template" \
+  $SUDO cp "$INSTALL_DIR/legacy/systemd/openclaw-gateway.service.d/env.conf.template" \
            /etc/systemd/system/openclaw-gateway.service.d/env.conf
   $SUDO chmod 600 /etc/systemd/system/openclaw-gateway.service.d/env.conf
 fi

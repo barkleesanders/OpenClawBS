@@ -45,6 +45,10 @@ records-monitor/cookies.txt
 records-monitor/nr-cookies.txt
 records-monitor/*.json.bak
 records-monitor/prr-list.json
+records-monitor/drafts/
+records-monitor/logs/
+records-monitor/__pycache__/
+records-monitor/*.pyc
 
 # Beads sync runtime
 beads-sync/*.jsonl

@@ -4,22 +4,21 @@ Read this every session **before** AGENTS.md. Short on purpose.
 
 ## 1. Dates
 
-- Today's date is in `memory/YYYY-MM-DD.md` (auto-written 00:01 PT by `openclaw-date-memo.timer`). Read today + yesterday.
+- Today's date is in `memory/YYYY-MM-DD.md` (auto-written 00:01 PT). Read today + yesterday.
 - Cron user messages always include a `Current time: ...` line — trust that over your training-data intuition.
 - Do not report a date from training data. If unsure, `date +%F` or read the memo file.
 
 ## 2. Task tracking (MANDATORY — every turn)
 
-`bd` (beads) is the ONLY task tracker. Installed at `/usr/local/bin/bd`. Never use TodoWrite, markdown checklists, or MEMORY.md for tasks.
+`bd` (beads) is the ONLY task tracker. On macOS Homebrew it lives at `/opt/homebrew/bin/bd`; on Linux it's typically `/usr/local/bin/bd`. Confirm with `command -v bd` if unsure. Never use TodoWrite, markdown checklists, or MEMORY.md for tasks.
 
 Mode: **strict-forced** by default — track every actionable request and skip only pure non-actionable chatter.
-Last synced with current run backup: 2026-04-24.
 
-**For every Telegram message from Barklee (anything substantive), run these commands. Each one is a SEPARATE exec call — do NOT chain with && or |.**
+**For every actionable user message, run these commands. Each one is a SEPARATE exec call — do NOT chain with && or |.**
 
-Create the issue:
+Create the issue (run from the workspace root that holds the right `.beads/` DB):
 ```bash
-(cd /root && BEADS_ACTOR=openclaw bd create --title="<1-line task>" --description="<context>" --type=task --priority=2) > /tmp/bd_issue.txt 2>/dev/null
+BEADS_ACTOR=openclaw bd create --title="<1-line task>" --description="<context>" --type=task --priority=2 > /tmp/bd_issue.txt 2>/dev/null
 ```
 
 Extract the ID:
@@ -30,19 +29,19 @@ echo "BEADS_ISSUE=$ISSUE"
 
 Claim it:
 ```bash
-[ -n "$ISSUE" ] && (cd /root && BEADS_ACTOR=openclaw bd update "$ISSUE" --claim) 2>/dev/null
+[ -n "$ISSUE" ] && BEADS_ACTOR=openclaw bd update "$ISSUE" --claim 2>/dev/null
 ```
 
 ... do the work ...
 
 Close it:
 ```bash
-[ -n "$ISSUE" ] && (cd /root && BEADS_ACTOR=openclaw bd close "$ISSUE" --reason="<what was done>") 2>/dev/null
+[ -n "$ISSUE" ] && BEADS_ACTOR=openclaw bd close "$ISSUE" --reason="<what was done>" 2>/dev/null
 ```
 
-**Why `(cd /root && ...)`:** OpenClaw runs with `cwd=/root/clawd`. Running `bd` from there creates `clawd-*` issues (VPS-only, not synced to Mac). Running from `/root` creates `HOME-*` issues that sync back to Barklee's Mac via the beads-sync service.
+**Why explicit working dir matters:** beads resolves the `.beads/` database from the CWD upward. Multi-host setups (e.g. Mac + remote agent) typically share a single shared workspace prefix (e.g. `~/clawd`) so both sides write to the same logical issue tracker. If you `cd` into a subproject with its own `.beads/`, you'll create issues in that scoped DB instead.
 
-**Why tempfile (not pipe):** This runs in a PTY session. Piping `bd create | grep` loses stdout. Writing to `/tmp/bd_issue.txt` then grepping is reliable.
+**Why tempfile (not pipe):** Cron sessions sometimes run in a PTY. Piping `bd create | grep` can lose stdout. Writing to `/tmp/bd_issue.txt` then grepping is reliable.
 
 **Why `grep "Created issue:"`:** bd output includes warning lines. The `Created issue:` line always contains the ID. This avoids matching warning text.
 
@@ -59,14 +58,13 @@ Cross-session memory: `bd remember "insight"` → persists across sessions. `bd 
 ## 4. Native-first
 
 - Prefer `openclaw <cmd>` over custom wrappers. Retired wrappers live in `~/.openclaw/retired-*`.
-- Pure shell tasks → systemd timer. AI tasks (reasoning/writing) → `openclaw cron`.
-- Recurring tasks → VPS (systemd timer or openclaw cron), NOT Mac / NOT in-session.
+- Pure shell tasks → host scheduler (`launchd` on macOS, `systemd` timer on Linux). AI tasks (reasoning/writing) → `openclaw cron`.
+- Recurring tasks → host scheduler or `openclaw cron`, NOT in-session.
 
-## 5. Cron context mode (UPDATED 2026-04-19)
+## 5. Cron context mode
 
-- Default: **full context** (omit `--light-context`). Z.AI Coding Plan Max is flat-rate $60/mo; full context is free and gives you skills + workspace.
+- Default: **full context** (omit `--light-context`). Flat-rate model plans make full context effectively free and give crons access to skills + workspace.
 - `--light-context` only when cron fires ≤ every 5 minutes.
-- `openclaw-policy-audit.timer` enforces this hourly.
 
 ## 6. Verification
 

@@ -1,0 +1,24 @@
+# ai.openclaw.gateway.env — secrets for the OpenClaw LaunchAgent.
+#
+# Copy this template to ~/.openclaw/service-env/ai.openclaw.gateway.env
+# Then `chmod 600` it. Never commit a filled-in copy.
+#
+# Each line: KEY=value (no quotes, no leading "export").
+
+# --- Composio (auth broker for ~24 services) ---
+COMPOSIO_API_KEY=YOUR_COMPOSIO_API_KEY
+
+# --- Telegram (alerts + agent chat surface) ---
+TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID=YOUR_TELEGRAM_CHAT_ID
+
+# --- Google Drive folder IDs (optional — only if you use composio-drive.sh) ---
+DRIVE_ROOT_FOLDER_ID=YOUR_DRIVE_ROOT_FOLDER_ID
+
+# --- Model provider tokens (only the ones you actually use) ---
+# OPENAI_API_KEY=YOUR_OPENAI_API_KEY
+# ANTHROPIC_API_KEY=YOUR_ANTHROPIC_API_KEY
+
+# --- Agent identity ---
+# Used as the `actor` field on beads writes so audit trails attribute correctly.
+BEADS_ACTOR=openclaw
