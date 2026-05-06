@@ -12,13 +12,27 @@ If you've tried to have an AI "remember" things and watched it confidently inven
 
 This is what I'm actually running, without secrets:
 
-- **Host/runtime:** Mac mini (macOS 26.4.1 arm64), Node 25.9.0, OpenClaw app `2026.4.29`.
+- **Host/runtime:** Mac mini (Apple Silicon, macOS/Darwin arm64), Node 25.9.0, OpenClaw app `2026.5.4` (kept current via explicit, manual updates only).
 - **Process supervisor:** macOS `launchd` LaunchAgent (`ai.openclaw.gateway`), loopback-only bind (`127.0.0.1:18789`), not publicly exposed. Reference plist: [`launchd/ai.openclaw.gateway.plist.template`](launchd/ai.openclaw.gateway.plist.template).
-- **Primary model route:** `openai-codex/gpt-5.3-codex`.
+- **Primary model route:** `openai-codex/gpt-5.5`, with tested fallback aliases documented locally; model switches are explicit, verified, and reversible.
 - **Workspace brain:** `~/clawd` with persistent markdown memory files (`SOUL.md`, `IDENTITY.md`, `USER.md`, `AGENTS.md`, `TOOLS.md`, `MEMORY.md`, daily notes).
-- **Automation:** ~37 OpenClaw cron jobs for AI agent work (NextRequest watcher, AIVA PR auto-merge, calendar deltas, weekly self-maintenance, etc.) plus a couple of `crontab` entries for pure shell jobs.
+- **Automation:** OpenClaw AI cron jobs only when reasoning is needed; deterministic monitors run as shell/Python via system cron/launchd to avoid paying full-agent context cost for simple checks.
 - **Messaging:** Telegram for actionable alerts; cron jobs default to quiet delivery unless action is needed.
-- **Auth pattern:** Composio-backed app connections; keys/tokens stay local (chmod 600 env files) and are never committed.
+- **Auth pattern:** Local-first secrets discipline: API keys/tokens stay in chmod 600 env files and are never committed. Google Workspace uses host-local OAuth via `gog`; Composio remains a useful broker/fallback for non-Google SaaS and legacy flows.
+
+
+### Recent improvements folded into the live setup
+
+These are the changes that made the stack quieter, safer, and more useful in day-to-day operation:
+
+- **Google Workspace moved to `gog` first.** Gmail, Calendar, Drive, Docs, Sheets, People, and Tasks use host-local OAuth instead of copied tokens. Each host performs its own OAuth flow; tokens are not moved between machines.
+- **Cron cost control is shell-first.** Jobs that only run a script and inspect output stay in system cron/launchd. OpenClaw AI cron jobs use light context, explicit timeouts, and quiet delivery unless action is required.
+- **Cron delivery is explicit.** OpenClaw cron jobs default to `delivery.mode: none`; jobs that need to notify send one intentional chat message themselves. This avoids duplicate digest noise.
+- **Beads + Asana split is cleaner.** Beads tracks agent execution locally; Asana is for human-facing work. Tasks created for a human always get an assignee instead of becoming ownerless.
+- **Video delivery is now size-aware.** Small generated videos can be sent directly; larger/high-quality renders create a chat-safe preview and upload the full file to Drive with an `anyone with link` permission. No keys or Drive IDs are baked into this repo.
+- **PERM digest formatting was rebuilt.** Weekly digests now show top scored matches, employer names, job titles, salary/ref, why the role matches, applications already sent, and DOJ IER clock counts — in one clean Telegram-friendly message.
+- **OpenClaw native-first rule is enforced.** Before adding wrappers or services, check what OpenClaw already ships. This prevents duplicating native commands with brittle custom daemons.
+- **Outage-only heartbeat posture.** Routine checks stay silent. The agent only interrupts for actionable issues, failures, approvals, or time-sensitive decisions.
 
 The Linux/VPS path that this repo originally documented still works and is preserved under [`legacy/`](legacy/) for anyone deploying on a Hetzner/OVH/DO box. See ["Where to run it"](#where-to-run-it) for the tradeoff.
 
@@ -49,13 +63,13 @@ Full playbook: **[`docs/00-security.md`](docs/00-security.md)**. Minimum viable 
 
 > **A reference architecture you can run on a local Mac mini (the canonical path) or a cheap Linux VPS (the legacy path), depending on your threat model and budget.**
 
-**Recommendation:** start on a Mac mini if you have one, or any other always-on macOS host. The original setup ran on a [**Hetzner Cloud CX23**](https://www.hetzner.com/cloud/) — **€3.99/mo** (~$4.50), 2 vCPU, 4 GB RAM — and that path still works (see [`legacy/`](legacy/)), but the Mac path wins once you need iMessage / Notes / Shortcuts integrations or your cron density goes past ~30 jobs.
+**Recommendation:** start on a Mac mini if you have one, or any other always-on macOS host. The original setup ran on a [**Hetzner Cloud CX23**](https://www.hetzner.com/cloud/) — **€3.99/mo** (~$4.50), 2 vCPU, 4 GB RAM — and that path still works (see [`legacy/`](legacy/)), but the Mac path wins once you need desktop integrations, local browser/media workflows, or your cron density gets high enough that reliability matters more than the cheapest possible VM.
 
 ### Mac mini (canonical, since 2026-04-29)
 
 | Plan | RAM | Price | When it's right |
 |------|-----|-------|-----------------|
-| [**Mac Mini M4 base**](https://www.apple.com/shop/buy-mac/mac-mini) | 16 GB | $599 once (+~$3/mo power) | **Default.** ~37 OpenClaw crons + Telegram bot + browser automation + iMessage automation fits comfortably. |
+| [**Mac Mini M4 base**](https://www.apple.com/shop/buy-mac/mac-mini) | 16 GB | $599 once (+~$3/mo power) | **Default.** OpenClaw gateway + chat alerts + browser automation + media workflows + mixed AI/shell cron load fits comfortably. |
 | [Mac Mini M4 Pro](https://www.apple.com/shop/buy-mac/mac-mini) | 24-64 GB | $1,399-$4,000 once | Serious local inference (up to 70B LLM) + high-concurrency automation. |
 
 ### Linux VPS (legacy, still supported)
@@ -133,7 +147,7 @@ OAuth tokens expire. RAM creeps up. Background jobs accumulate zombies. None of 
 
 **The fix here: three layers of defense.**
 
-1. **Composio-first auth** ([`docs/04-composio-first-auth.md`](docs/04-composio-first-auth.md)): never hold an OAuth token yourself. Let Composio auto-refresh them. Fetch fresh tokens on every cron run. Tokens *cannot* expire from your perspective.
+1. **Brokered or host-local OAuth** ([`docs/04-composio-first-auth.md`](docs/04-composio-first-auth.md)): avoid hand-rolled refresh logic. Use a broker like Composio for SaaS integrations, or a host-local CLI like `gog` for Google Workspace. Never copy OAuth tokens between machines.
 2. **Memory guardian (Linux only)** ([`legacy/scripts/memory-guardian.sh`](legacy/scripts/memory-guardian.sh)): a 5-minute cron that checks RSS, available RAM, and disk growth, and proactively restarts the gateway via `systemctl` before the kernel OOM killer fires. **macOS doesn't need this** — launchd respawns crashed processes cleanly and the M-series memory pressure handling is gentler than Linux's. Pattern is preserved for the VPS path.
 3. **Rich failure alerts** ([`scripts/lib/alert.sh`](scripts/lib/alert.sh)): when a cron fails, the Telegram message includes severity, step, UTC time, runtime, the actual error, and the last 5 log lines. So when you wake up, you already know where to look.
 
@@ -161,9 +175,9 @@ The pattern: **shell > Python > AI session**. Shell is free and fast. Python is 
 
 ### Cron jobs as autonomous mini-agents
 
-A cron job isn't "scheduled script" here — it's a mini-agent that wakes up, checks something, acts if needed, and goes back to sleep. The ~37 OpenClaw cron jobs on my Mac mini together form a continuous background heartbeat. Some are pure shell (cheap, fast, deterministic) and live in `crontab` / launchd. The AI-reasoning ones live in `openclaw cron`.
+A cron job is not automatically an AI session. Some jobs are mini-agents that wake up, read context, decide, act, and go back to sleep. Others are pure shell checks that should never pay the cost of a full model turn. Shell/Python jobs live in system cron or launchd; genuine reasoning jobs live in `openclaw cron`.
 
-The discipline: **every cron alerts Telegram on failure, writes status on success, and has a timeout.** Failures never go unnoticed. Successes stay quiet.
+The discipline: **every cron has a timeout, logs enough evidence to debug, and only alerts when action is needed.** Failures never go unnoticed. Successes stay quiet.
 
 See [`scripts/templates/cron-wrapper.sh`](scripts/templates/cron-wrapper.sh) — a wrapper that adds locking, timeout, alerting, and log rotation to any cron line.
 
@@ -222,9 +236,9 @@ Rough math on a 6-month old project: without this pattern, ~40% of every session
 
 - **Laptop (Claude Code)** does heavy reasoning, skill composition, code editing
 - **OpenClaw host** is the always-on brain — crons run, memory persists, Telegram bot replies
-  - **Mac mini path:** `launchd` LaunchAgent supervises the gateway; ~37 `openclaw cron` jobs handle agent work; system `crontab` handles deterministic shell jobs; iMessage/Notes/Shortcuts available natively.
+  - **Mac mini path:** `launchd` LaunchAgent supervises the gateway; `openclaw cron` handles reasoning work; system `crontab`/launchd handles deterministic shell jobs; browser, media, Drive, and desktop workflows run locally.
   - **Linux VPS path (legacy):** systemd unit supervises the gateway; `memory-guardian.sh` watchdogs OOM; otherwise identical.
-- **Composio** is the OAuth broker for the ~24 services the agent talks to
+- **OAuth/tool brokers** provide service access without committing secrets: `gog` for Google Workspace on the host; Composio or service-specific CLIs for other SaaS.
 
 Each layer has exactly one job. Simple enough to reason about; resilient because failures in one layer don't cascade.
 
@@ -233,10 +247,10 @@ Each layer has exactly one job. Simple enough to reason about; resilient because
 ## The patterns, one sentence each
 
 1. **Workspace-as-brain** — Fixed markdown files (SOUL/IDENTITY/USER/AGENTS/TOOLS/MEMORY) are the agent's persistent home. ([`docs/03-workspace.md`](docs/03-workspace.md))
-2. **Composio-first auth** — Never hold OAuth tokens; let Composio auto-refresh them. ([`docs/04-composio-first-auth.md`](docs/04-composio-first-auth.md))
+2. **OAuth without token copying** — Prefer host-local or brokered OAuth; never commit or move raw tokens between machines. ([`docs/04-composio-first-auth.md`](docs/04-composio-first-auth.md))
 3. **Memory guardian (Linux only)** — 5-minute OOM watchdog with proactive systemd restart + Telegram alerts. ([`legacy/docs/05-memory-guardian.md`](legacy/docs/05-memory-guardian.md))
 4. **Shell-first crons** — AI sessions are expensive; use shell/Python first, AI only when genuine reasoning is needed. ([`docs/06-shell-first-crons.md`](docs/06-shell-first-crons.md))
-5. **Rich failure alerts** — Every cron failure gets a Telegram message with severity, step, UTC time, runtime, error detail, and log tail. ([`docs/07-telegram-alerts.md`](docs/07-telegram-alerts.md))
+5. **Actionable failure alerts** — Alert only on failures or decisions, with severity, step, time, runtime, error detail, and log tail. ([`docs/07-telegram-alerts.md`](docs/07-telegram-alerts.md))
 6. **OpenClaw native-first** — Before any custom script, cron, or service unit, check what `openclaw` does natively. Custom wrappers are last resort. ([`docs/12-openclaw-native-first.md`](docs/12-openclaw-native-first.md))
 
 ---
@@ -247,10 +261,10 @@ Each layer has exactly one job. Simple enough to reason about; resilient because
 docs/              — Philosophy & architecture essays (the "why")
 workspace/         — Markdown templates for the agent's home directory
 launchd/           — macOS LaunchAgent + env-wrapper templates (canonical deployment)
-scripts/           — Cross-platform shell: composio-drive, alert, backup/cron templates
+scripts/           — Cross-platform shell: Drive upload, alert, backup/cron templates
   lib/             — alert.sh, composio-token.sh (sourceable helpers)
   templates/       — backup-template.sh, cron-wrapper.sh (fork + fill in)
-  composio-drive.sh — Upload files to Drive via Composio OAuth (no rclone, no token expiration)
+  composio-drive.sh — Upload files to Drive through a configured OAuth path (template; no secrets committed)
 claude-code/       — Laptop-side: hooks, CLAUDE.md sections, agent/skill patterns
 examples/          — End-to-end walkthroughs
 records-monitor/   — NextRequest CPRA/FOIA document watcher + Drive uploader + gap analysis
@@ -293,7 +307,7 @@ MIT. Do whatever.
 
 ## Related
 
-- [Composio](https://composio.dev) — the auth broker this setup is built around
+- [Composio](https://composio.dev) — useful brokered OAuth layer for SaaS integrations
 - [Beads](https://github.com/steveyegge/beads) — the task tracker the Stop hook uses
 - [Ghidra](https://ghidra-sre.org/) — when you need to reverse-engineer an undocumented API
 - [OpenClaw](https://github.com/openclaw/openclaw) — the underlying runtime this setup configures ([npm](https://www.npmjs.com/package/openclaw))
