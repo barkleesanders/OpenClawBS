@@ -30,7 +30,6 @@ These are the changes that made the stack quieter, safer, and more useful in day
 - **Cron delivery is explicit.** OpenClaw cron jobs default to `delivery.mode: none`; jobs that need to notify send one intentional chat message themselves. This avoids duplicate digest noise.
 - **Beads + Asana split is cleaner.** Beads tracks agent execution locally; Asana is for human-facing work. Tasks created for a human always get an assignee instead of becoming ownerless.
 - **Video delivery is now size-aware.** Small generated videos can be sent directly; larger/high-quality renders create a chat-safe preview and upload the full file to Drive with an `anyone with link` permission. No keys or Drive IDs are baked into this repo.
-- **PERM digest formatting was rebuilt.** Weekly digests now show top scored matches, employer names, job titles, salary/ref, why the role matches, applications already sent, and DOJ IER clock counts — in one clean Telegram-friendly message.
 - **OpenClaw native-first rule is enforced.** Before adding wrappers or services, check what OpenClaw already ships. This prevents duplicating native commands with brittle custom daemons.
 - **Outage-only heartbeat posture.** Routine checks stay silent. The agent only interrupts for actionable issues, failures, approvals, or time-sensitive decisions.
 
