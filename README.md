@@ -310,4 +310,5 @@ MIT. Do whatever.
 - [Beads](https://github.com/steveyegge/beads) — the task tracker the Stop hook uses
 - [Ghidra](https://ghidra-sre.org/) — when you need to reverse-engineer an undocumented API
 - [OpenClaw](https://github.com/openclaw/openclaw) — the underlying runtime this setup configures ([npm](https://www.npmjs.com/package/openclaw))
+- [hermes-setup](https://github.com/barkleesanders/hermes-setup) — a concrete worked example: Mac mini deployment of NousResearch/hermes-agent running on this scheduling pattern.
 - Claude Code — Anthropic's CLI, layer 1 of the stack
